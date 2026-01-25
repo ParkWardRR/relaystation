@@ -71,6 +71,13 @@ func NewRouter(cfg *config.Manager, mgr *stream.Manager, staticDir string) *fibe
 	})
 	app.Get("/ws/events", wsHandler.Upgrade())
 
+	// HLS output files - serve from manager's output directory
+	hlsOutputDir := mgr.OutputBase()
+	app.Static("/hls", hlsOutputDir, fiber.Static{
+		Compress: false,
+		CacheDuration: 0,
+	})
+
 	// Static files (SvelteKit build)
 	if staticDir != "" {
 		app.Static("/", staticDir)

@@ -17,7 +17,7 @@
 	<title>RelayStation</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+<div class="min-h-screen">
 	<slot />
 </div>
 
