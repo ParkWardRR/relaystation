@@ -150,6 +150,11 @@ export const api = {
 		}),
 	getSourceInfo: (id: string) => fetchAPI<SourceInfo>(`/streams/${id}/source-info`),
 	getStreamCharacteristics: (id: string) => fetchAPI<StreamCharacteristics>(`/streams/${id}/characteristics`),
+	probeURL: (url: string) =>
+		fetchAPI<StreamCharacteristics>('/probe-url', {
+			method: 'POST',
+			body: JSON.stringify({ url })
+		}),
 
 	// Presets
 	getPresets: () => fetchAPI<Preset[]>('/presets'),
