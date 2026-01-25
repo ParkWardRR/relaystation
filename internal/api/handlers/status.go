@@ -2,7 +2,11 @@ package handlers
 
 import (
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -32,13 +36,17 @@ func (h *StatusHandler) GetStatus(c *fiber.Ctx) error {
 
 	hostname, _ := os.Hostname()
 	uptime := h.manager.Uptime()
+	publicIP := getPublicIP()
+	reverseDNS := getReverseDNS(publicIP)
 
 	response := models.StatusResponse{
 		Streams: streams,
 		Server: models.ServerInfo{
-			Hostname: hostname,
-			Uptime:   formatDuration(uptime),
-			Version:  Version,
+			Hostname:   hostname,
+			PublicIP:   publicIP,
+			ReverseDNS: reverseDNS,
+			Uptime:     formatDuration(uptime),
+			Version:    Version,
 		},
 	}
 
@@ -61,4 +69,33 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dh %dm", hours, minutes)
 	}
 	return fmt.Sprintf("%dm", minutes)
+}
+
+// getPublicIP fetches the public IP address using an external service
+func getPublicIP() string {
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("https://api.ipify.org")
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(body))
+}
+
+// getReverseDNS performs a reverse DNS lookup for the given IP
+func getReverseDNS(ip string) string {
+	if ip == "" {
+		return ""
+	}
+	names, err := net.LookupAddr(ip)
+	if err != nil || len(names) == 0 {
+		return ""
+	}
+	// Remove trailing dot from DNS name
+	return strings.TrimSuffix(names[0], ".")
 }

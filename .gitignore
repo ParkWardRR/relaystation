@@ -1,0 +1,33 @@
+# Binaries
+relaystation
+*.exe
+
+# Go
+*.test
+*.out
+
+# Node
+node_modules/
+.svelte-kit/
+
+# HLS output
+hls/
+*.m3u8
+*.ts
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local

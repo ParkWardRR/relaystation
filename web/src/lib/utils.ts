@@ -29,5 +29,7 @@ export function formatResolution(resolution: string | undefined): string {
 
 export function getStreamUrl(path: string): string {
 	const base = window.location.origin;
-	return `${base}${path}stream.m3u8`;
+	// Ensure path starts with /hls/ for the HLS static file server
+	const hlsPath = path.startsWith('/hls/') ? path : `/hls${path}`;
+	return `${base}${hlsPath}stream.m3u8`;
 }

@@ -84,9 +84,11 @@ type ProfileStatus struct {
 
 // ServerInfo represents server metadata
 type ServerInfo struct {
-	Hostname string `json:"hostname"`
-	Uptime   string `json:"uptime"`
-	Version  string `json:"version"`
+	Hostname   string `json:"hostname"`
+	PublicIP   string `json:"public_ip,omitempty"`
+	ReverseDNS string `json:"reverse_dns,omitempty"`
+	Uptime     string `json:"uptime"`
+	Version    string `json:"version"`
 }
 
 // StatusResponse is the response for /api/status

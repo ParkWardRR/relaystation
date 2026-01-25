@@ -6,20 +6,20 @@
       "upstream": "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
       "enabled": true,
       "profiles": {
-        "legacy_ipad": {
-          "id": "apple-demo_legacy_ipad",
+        "high_quality": {
+          "id": "apple-demo_high_quality",
           "enabled": true,
           "passthrough": false,
-          "path": "/legacy_ipad/apple-demo/",
+          "path": "/high_quality/apple-demo/",
           "codec": "h264",
-          "profile": "main",
-          "level": "3.1",
-          "resolution": "1280x720",
-          "bitrate": "2000k",
-          "maxrate": "2500k",
+          "profile": "high",
+          "level": "4.1",
+          "resolution": "1920x1080",
+          "bitrate": "6000k",
+          "maxrate": "7000k",
           "fps": 30,
-          "audio_bitrate": "128k",
-          "audio_sample": "44100"
+          "audio_bitrate": "192k",
+          "audio_sample": "48000"
         }
       }
     }

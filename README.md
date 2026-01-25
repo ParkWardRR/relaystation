@@ -2,14 +2,14 @@
 
 # RelayStation
 
-**Self-hosted HLS streaming relay and transcoder with a modern web interface**
+<img src="https://img.shields.io/badge/Self--Hosted-HLS%20Relay-20B2AA?style=for-the-badge&labelColor=0f172a" alt="RelayStation">
+
+**Transform any HLS stream with real-time transcoding, a stunning dark-mode dashboard, and effortless Docker deployment**
 
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-Blue_Oak_1.0.0-4A90D9?style=for-the-badge)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-Frontend-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)](https://kit.svelte.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![FFmpeg](https://img.shields.io/badge/FFmpeg-Powered-007808?style=for-the-badge&logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
 
 [![Release](https://img.shields.io/badge/Release-v1.0.0-blue?style=for-the-badge&logo=github)](https://github.com/ParkWardRR/relaystation/releases/tag/v1.0.0)
 [![GitHub Stars](https://img.shields.io/github/stars/ParkWardRR/relaystation?style=for-the-badge&logo=github)](https://github.com/ParkWardRR/relaystation/stargazers)
@@ -17,67 +17,151 @@
 
 ---
 
-[Features](#features) • [Installation](#installation) • [Configuration](#configuration) • [API](#api-endpoints)
+[Features](#-features) • [Quick Start](#-quick-start) • [Screenshots](#-screenshots) • [Installation](#-installation) • [API](#-api-endpoints)
 
 </div>
 
-![Dashboard](screenshots/dashboard.png)
+<br>
 
-## Features
+<p align="center">
+  <img src="screenshots/dashboard.png" alt="RelayStation Dashboard" width="100%">
+</p>
 
-- **Real-time HLS Transcoding** — Convert any HLS stream to H.264/H.265 with configurable quality
-- **8 Built-in Presets** — Optimized for different devices (iPad, Apple TV, mobile, etc.)
-- **Live Status Dashboard** — Real-time stream monitoring via WebSocket
-- **Modern Admin Panel** — Manage streams, presets, and settings with a clean UI
-- **Docker-Ready** — Single-command deployment with Docker Compose
-- **Source Probing** — Automatically detect upstream stream quality and variants
+<br>
 
-## Screenshots
+## ✨ Features
 
-<details>
-<summary><strong>Admin Panel - Streams</strong></summary>
+<table>
+<tr>
+<td width="50%">
 
-![Admin Streams](screenshots/admin-streams.png)
+### 🎬 Streaming
+- **Real-time HLS Transcoding** — H.264 & H.265/HEVC support
+- **8 Built-in Presets** — Optimized for iPad, Apple TV, mobile, and more
+- **Passthrough Mode** — Zero-latency relay without transcoding
+- **Source Probing** — Auto-detect upstream quality and variants
+
+</td>
+<td width="50%">
+
+### 🖥️ Dashboard
+- **Built-in Video Player** — Preview streams directly in your browser
+- **Real-time Updates** — WebSocket-powered live status
+- **Glass Morphism UI** — Modern, responsive dark-mode design
+- **Mobile-First** — Works beautifully on any device
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### ⚙️ Management
+- **Stream Manager** — Add, edit, and toggle streams on the fly
+- **Preset Editor** — Customize or create new encoding profiles
+- **Hot Reload** — Apply changes without restarting
+- **REST API** — Full programmatic control
+
+</td>
+<td width="50%">
+
+### 🚀 Deployment
+- **Single Docker Command** — Up and running in seconds
+- **Multi-Platform** — macOS, Linux, DigitalOcean, and more
+- **Nginx Ready** — SSL/TLS termination support
+- **Systemd Integration** — Auto-start on boot
+
+</td>
+</tr>
+</table>
+
+<br>
+
+## 🚀 Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/ParkWardRR/relaystation.git
+cd relaystation
+
+# Start with Docker Compose
+docker compose -f docker/docker-compose.yml up -d
+
+# Open your browser
+open http://localhost:8080
+```
+
+That's it! Add your first stream via the Admin Panel or edit `configs/streams.json`.
+
+<br>
+
+## 📸 Screenshots
+
+<details open>
+<summary><strong>🎛️ Live Dashboard</strong> — Real-time stream monitoring with built-in HLS player</summary>
+<br>
+<p align="center">
+  <img src="screenshots/dashboard.png" alt="Dashboard" width="100%">
+</p>
 </details>
 
 <details>
-<summary><strong>Admin Panel - Presets</strong></summary>
-
-![Admin Presets](screenshots/admin-presets.png)
+<summary><strong>📱 Mobile View</strong> — Fully responsive design for on-the-go monitoring</summary>
+<br>
+<p align="center">
+  <img src="screenshots/dashboard-mobile.png" alt="Mobile Dashboard" width="300">
+</p>
 </details>
 
 <details>
-<summary><strong>Admin Panel - Settings</strong></summary>
-
-![Admin Settings](screenshots/admin-settings.png)
+<summary><strong>📡 Admin Panel - Streams</strong> — Manage all your streams in one place</summary>
+<br>
+<p align="center">
+  <img src="screenshots/admin-streams.png" alt="Admin Streams" width="100%">
+</p>
 </details>
 
-## Tech Stack
+<details>
+<summary><strong>🎨 Admin Panel - Presets</strong> — Customize transcoding profiles</summary>
+<br>
+<p align="center">
+  <img src="screenshots/admin-presets.png" alt="Admin Presets" width="100%">
+</p>
+</details>
+
+<details>
+<summary><strong>⚙️ Admin Panel - Settings</strong> — Configure global defaults</summary>
+<br>
+<p align="center">
+  <img src="screenshots/admin-settings.png" alt="Admin Settings" width="100%">
+</p>
+</details>
+
+<br>
+
+## 🛠️ Tech Stack
 
 | Component | Technology |
 |-----------|------------|
-| **Backend** | Go 1.22 + Fiber |
-| **Frontend** | SvelteKit + Tailwind CSS + shadcn-svelte |
-| **Streaming** | FFmpeg with H.264/H.265 |
+| **Backend** | Go 1.22 + [Fiber](https://gofiber.io/) |
+| **Frontend** | [SvelteKit](https://kit.svelte.dev/) + [Tailwind CSS](https://tailwindcss.com/) + [shadcn-svelte](https://www.shadcn-svelte.com/) |
+| **Video Player** | [HLS.js](https://github.com/video-dev/hls.js) |
+| **Streaming** | [FFmpeg](https://ffmpeg.org/) (H.264/H.265) |
 | **Deployment** | Docker + Docker Compose |
 
----
+<br>
 
-## Installation
+## 📦 Installation
 
 Choose your platform below. Each includes both development and production setup.
 
----
+<details>
+<summary><strong>🍎 macOS + OrbStack</strong></summary>
 
-### 🍎 macOS + OrbStack
-
-#### Prerequisites
-
-- [OrbStack](https://orbstack.dev/) installed (or Docker Desktop)
+### Prerequisites
+- [OrbStack](https://orbstack.dev/) (or Docker Desktop)
 - Git
 
-#### Development Setup
-
+### Development Setup
 ```bash
 # Install dev tools via Homebrew
 brew install go node ffmpeg
@@ -89,277 +173,76 @@ cd relaystation
 # Install frontend dependencies
 make web-install
 
-# Option 1: Run backend + frontend separately (hot reload)
+# Run backend + frontend separately (hot reload)
 make web-dev          # Terminal 1: Frontend dev server
 make dev              # Terminal 2: Backend
-
-# Option 2: Development Docker Compose
-docker compose -f docker/docker-compose.dev.yml up
 ```
 
-#### Production Setup
-
+### Production Setup
 ```bash
-# Clone the repository
 git clone https://github.com/ParkWardRR/relaystation.git
 cd relaystation
-
-# Build and start with Docker Compose
 docker compose -f docker/docker-compose.yml up -d
-
-# View logs
-docker compose -f docker/docker-compose.yml logs -f
-
-# Access the dashboard
 open http://localhost:8080
 ```
 
-**Auto-start on login (launchd):**
+**Auto-start on login:** Create `~/Library/LaunchAgents/com.relaystation.plist` — see full docs below.
 
-Create `~/Library/LaunchAgents/com.relaystation.plist`:
+</details>
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.relaystation</string>
-    <key>WorkingDirectory</key>
-    <string>/path/to/relaystation</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/local/bin/docker</string>
-        <string>compose</string>
-        <string>-f</string>
-        <string>docker/docker-compose.yml</string>
-        <string>up</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-</dict>
-</plist>
-```
+<details>
+<summary><strong>🐧 AlmaLinux / RHEL</strong></summary>
 
+### Prerequisites
 ```bash
-launchctl load ~/Library/LaunchAgents/com.relaystation.plist
-```
-
----
-
-### 🐧 AlmaLinux
-
-#### Prerequisites
-
-```bash
-# Update system
 sudo dnf update -y
-
-# Install Docker
 sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-# Start and enable Docker
-sudo systemctl start docker
-sudo systemctl enable docker
-
-# Add your user to docker group (logout/login required)
+sudo systemctl enable --now docker
 sudo usermod -aG docker $USER
 ```
 
-#### Development Setup
-
+### Production Setup
 ```bash
-# Install dev tools
-sudo dnf install -y golang nodejs npm
-sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
-sudo dnf install -y ffmpeg --enablerepo=epel
-
-# Clone the repository
 git clone https://github.com/ParkWardRR/relaystation.git
 cd relaystation
-
-# Install frontend dependencies
-make web-install
-
-# Option 1: Run backend + frontend separately (hot reload)
-make web-dev          # Terminal 1: Frontend dev server
-make dev              # Terminal 2: Backend
-
-# Option 2: Development Docker Compose
-docker compose -f docker/docker-compose.dev.yml up
-```
-
-#### Production Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/ParkWardRR/relaystation.git
-cd relaystation
-
-# Create data directories
-sudo mkdir -p /opt/relaystation
-sudo cp -r . /opt/relaystation/
-cd /opt/relaystation
-
-# Start the application
 docker compose -f docker/docker-compose.yml up -d
-
-# Configure firewall
-sudo firewall-cmd --permanent --add-port=8080/tcp
-sudo firewall-cmd --reload
+sudo firewall-cmd --permanent --add-port=8080/tcp && sudo firewall-cmd --reload
 ```
 
-**Auto-start with systemd:**
+**Auto-start with systemd:** Create `/etc/systemd/system/relaystation.service` — see full docs below.
 
-Create `/etc/systemd/system/relaystation.service`:
+</details>
 
-```ini
-[Unit]
-Description=RelayStation HLS Streaming Relay
-After=docker.service
-Requires=docker.service
+<details>
+<summary><strong>🌊 DigitalOcean Droplet</strong></summary>
 
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=/opt/relaystation
-ExecStart=/usr/bin/docker compose -f docker/docker-compose.yml up -d
-ExecStop=/usr/bin/docker compose -f docker/docker-compose.yml down
+### Create Droplet
+1. **Image:** Docker on Ubuntu (Marketplace)
+2. **Size:** Basic $6/mo (1 vCPU, 1GB) — or higher for multiple streams
+3. **Region:** Choose closest to your users
+4. **Auth:** SSH keys (recommended)
 
-[Install]
-WantedBy=multi-user.target
-```
-
+### Production Setup
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable relaystation
-sudo systemctl start relaystation
-```
-
----
-
-### 🌊 DigitalOcean Droplet
-
-#### Create Droplet
-
-1. Log in to [DigitalOcean](https://cloud.digitalocean.com/)
-2. Create a new Droplet:
-   - **Image:** Docker on Ubuntu (from Marketplace)
-   - **Size:** Basic $6/mo (1 vCPU, 1GB RAM) or higher for multiple streams
-   - **Region:** Choose closest to your users
-   - **Authentication:** SSH keys (recommended)
-
-#### Development Setup
-
-```bash
-# SSH into your droplet
 ssh root@your-droplet-ip
-
-# Install dev tools
-apt update && apt install -y golang-go nodejs npm ffmpeg
-
-# Clone the repository
 git clone https://github.com/ParkWardRR/relaystation.git
 cd relaystation
-
-# Install frontend dependencies
-make web-install
-
-# Option 1: Run backend + frontend separately (hot reload)
-make web-dev          # Terminal 1: Frontend dev server
-make dev              # Terminal 2: Backend
-
-# Option 2: Development Docker Compose
-docker compose -f docker/docker-compose.dev.yml up
-```
-
-#### Production Setup
-
-```bash
-# SSH into your droplet
-ssh root@your-droplet-ip
-
-# Clone the repository
-git clone https://github.com/ParkWardRR/relaystation.git
-cd relaystation
-
-# Start RelayStation
 docker compose -f docker/docker-compose.yml up -d
 
 # Configure firewall
 ufw allow OpenSSH
 ufw allow 8080/tcp
 ufw enable
-
-# Verify it's running
-docker compose -f docker/docker-compose.yml ps
 ```
 
-**Setup domain with Nginx + SSL:**
+**Domain + SSL:** Install Nginx + Certbot — see full docs below.
 
-```bash
-# Install Nginx and Certbot
-apt update && apt install -y nginx certbot python3-certbot-nginx
+</details>
 
-# Create Nginx config
-cat > /etc/nginx/sites-available/relaystation << 'EOF'
-server {
-    listen 80;
-    server_name your-domain.com;
+<br>
 
-    location / {
-        proxy_pass http://localhost:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-EOF
-
-# Enable site
-ln -s /etc/nginx/sites-available/relaystation /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
-
-# Get SSL certificate
-certbot --nginx -d your-domain.com
-```
-
-**Auto-start with systemd:**
-
-Create `/etc/systemd/system/relaystation.service`:
-
-```ini
-[Unit]
-Description=RelayStation HLS Streaming Relay
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=/root/relaystation
-ExecStart=/usr/bin/docker compose -f docker/docker-compose.yml up -d
-ExecStop=/usr/bin/docker compose -f docker/docker-compose.yml down
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-systemctl daemon-reload
-systemctl enable relaystation
-systemctl start relaystation
-```
-
----
-
-## Configuration
+## ⚙️ Configuration
 
 Edit `configs/streams.json` to add your streams:
 
@@ -372,7 +255,7 @@ Edit `configs/streams.json` to add your streams:
       "upstream": "https://example.com/stream.m3u8",
       "enabled": true,
       "profiles": {
-        "legacy_ipad": {
+        "high_quality": {
           "enabled": true
         }
       }
@@ -390,24 +273,24 @@ Edit `configs/streams.json` to add your streams:
 | `HLS_OUTPUT_DIR` | `./hls` | Directory for HLS segments |
 | `FFMPEG_PATH` | `ffmpeg` | Path to FFmpeg binary |
 
----
+<br>
 
-## Built-in Presets
+## 🎨 Built-in Presets
 
 | Preset | Codec | Resolution | Bitrate | Use Case |
 |--------|-------|------------|---------|----------|
-| **HEVC 1080p** | H.265 | 1920x1080 | 4.0 Mbps | Modern Apple devices |
-| **HEVC Max Quality** | H.265 | 1920x1080 | 8.0 Mbps | Apple TV 4K, iPad Pro |
-| **Legacy iPad** | H.264 | 1280x720 | 2.0 Mbps | iPad 2, iPad Mini 1-3, iPad 3-4 |
-| **Modern Tablet** | H.264 | 1920x1080 | 4.0 Mbps | iPad Air, iPad Pro, iPad Mini 4+ |
-| **Apple TV 3rd Gen** | H.264 | 1280x720 | 2.5 Mbps | Apple TV 3 (A1427/A1469) |
-| **Mobile Optimized** | H.264 | 854x480 | 1.0 Mbps | Low bandwidth / cellular |
-| **High Quality** | H.264 | 1920x1080 | 6.0 Mbps | Fast networks, max H.264 quality |
-| **Passthrough** | Copy | — | — | No transcoding, lowest latency |
+| **HEVC 1080p** | H.265 | 1920×1080 | 4.0 Mbps | Modern Apple devices |
+| **HEVC Max Quality** | H.265 | 1920×1080 | 8.0 Mbps | Apple TV 4K, iPad Pro |
+| **Legacy iPad** | H.264 | 1280×720 | 2.0 Mbps | iPad 2, iPad Mini 1-3 |
+| **Modern Tablet** | H.264 | 1920×1080 | 4.0 Mbps | iPad Air, iPad Pro |
+| **Apple TV 3rd Gen** | H.264 | 1280×720 | 2.5 Mbps | Apple TV 3 |
+| **Mobile Optimized** | H.264 | 854×480 | 1.0 Mbps | Cellular / low bandwidth |
+| **High Quality** | H.264 | 1920×1080 | 6.0 Mbps | Fast networks |
+| **Passthrough** | Copy | — | — | Lowest latency |
 
----
+<br>
 
-## API Endpoints
+## 🔌 API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -421,9 +304,9 @@ Edit `configs/streams.json` to add your streams:
 | `/api/reload` | POST | Hot-reload configuration |
 | `/ws/events` | WebSocket | Real-time status updates |
 
----
+<br>
 
-## Make Commands
+## 🧑‍💻 Development
 
 ```bash
 make build        # Build Go binary
@@ -433,16 +316,15 @@ make clean        # Clean build artifacts
 make docker       # Build Docker image
 make docker-up    # Start with Docker Compose
 make docker-down  # Stop Docker Compose
-make docker-dev   # Development with Docker Compose
 make web-install  # Install web dependencies
 make web-build    # Build web frontend
 make web-dev      # Run web dev server
 make all          # Full build (web + docker)
 ```
 
----
+<br>
 
-## Architecture
+## 📁 Architecture
 
 ```
 relaystation/
@@ -462,11 +344,13 @@ relaystation/
 └── configs/                # Stream configuration
 ```
 
----
+<br>
 
-## License
+## 📄 License
 
 This project is licensed under the [Blue Oak Model License 1.0.0](LICENSE).
+
+<br>
 
 ---
 
@@ -474,6 +358,8 @@ This project is licensed under the [Blue Oak Model License 1.0.0](LICENSE).
 
 **[⬆ Back to Top](#relaystation)**
 
- Built for streaming flexibility 
+<br>
+
+<sub>Built for streaming flexibility</sub>
 
 </div>

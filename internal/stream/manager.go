@@ -239,3 +239,8 @@ func (m *Manager) Subscribe() <-chan models.StreamEvent {
 func (m *Manager) Uptime() time.Duration {
 	return time.Since(m.startTime)
 }
+
+// OutputBase returns the base directory for HLS output
+func (m *Manager) OutputBase() string {
+	return m.outputBase
+}
