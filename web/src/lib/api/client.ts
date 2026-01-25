@@ -92,6 +92,18 @@ export interface SourceVariant {
 	uri?: string;
 }
 
+export interface StreamCharacteristics {
+	stream_type: 'live' | 'vod' | 'unknown';
+	segment_format: 'mpegts' | 'fmp4' | 'unknown';
+	is_multi_variant: boolean;
+	has_subtitles: boolean;
+	has_audio: boolean;
+	target_duration: number;
+	max_bandwidth: number;
+	max_resolution: string;
+	variant_count: number;
+}
+
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
 	const response = await fetch(`${API_BASE}${endpoint}`, {
 		headers: {
@@ -137,6 +149,7 @@ export const api = {
 			body: JSON.stringify(preset)
 		}),
 	getSourceInfo: (id: string) => fetchAPI<SourceInfo>(`/streams/${id}/source-info`),
+	getStreamCharacteristics: (id: string) => fetchAPI<StreamCharacteristics>(`/streams/${id}/characteristics`),
 
 	// Presets
 	getPresets: () => fetchAPI<Preset[]>('/presets'),
