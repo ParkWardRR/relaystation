@@ -257,14 +257,53 @@ func (h *StreamHandler) GetStreamCharacteristics(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"stream_type":     string(chars.StreamType),
-		"segment_format":  string(chars.SegmentFormat),
+		"stream_type":      string(chars.StreamType),
+		"segment_format":   string(chars.SegmentFormat),
 		"is_multi_variant": chars.IsMultiVariant,
-		"has_subtitles":   chars.HasSubtitles,
-		"has_audio":       chars.HasAudio,
-		"target_duration": chars.TargetDuration,
-		"max_bandwidth":   chars.MaxBandwidth,
-		"max_resolution":  chars.MaxResolution,
-		"variant_count":   chars.VariantCount,
+		"has_subtitles":    chars.HasSubtitles,
+		"has_audio":        chars.HasAudio,
+		"target_duration":  chars.TargetDuration,
+		"max_bandwidth":    chars.MaxBandwidth,
+		"max_resolution":   chars.MaxResolution,
+		"variant_count":    chars.VariantCount,
+	})
+}
+
+// ProbeURL probes an arbitrary URL for stream characteristics (used in add/edit modal)
+func (h *StreamHandler) ProbeURL(c *fiber.Ctx) error {
+	var req struct {
+		URL string `json:"url"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	if req.URL == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "URL is required",
+		})
+	}
+
+	chars, err := ffmpeg.ProbeStreamCharacteristics(req.URL)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error":   "Failed to probe URL",
+			"details": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"stream_type":      string(chars.StreamType),
+		"segment_format":   string(chars.SegmentFormat),
+		"is_multi_variant": chars.IsMultiVariant,
+		"has_subtitles":    chars.HasSubtitles,
+		"has_audio":        chars.HasAudio,
+		"target_duration":  chars.TargetDuration,
+		"max_bandwidth":    chars.MaxBandwidth,
+		"max_resolution":   chars.MaxResolution,
+		"variant_count":    chars.VariantCount,
 	})
 }

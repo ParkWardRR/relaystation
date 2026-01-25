@@ -52,6 +52,7 @@ func NewRouter(cfg *config.Manager, mgr *stream.Manager, staticDir string) *fibe
 	api.Put("/streams/:id/preset", streamHandler.ApplyPreset)
 	api.Get("/streams/:id/source-info", streamHandler.GetSourceInfo)
 	api.Get("/streams/:id/characteristics", streamHandler.GetStreamCharacteristics)
+	api.Post("/probe-url", streamHandler.ProbeURL)
 
 	// Presets
 	api.Get("/presets", presetHandler.List)
