@@ -236,3 +236,35 @@ func (h *StreamHandler) GetSourceInfo(c *fiber.Ctx) error {
 
 	return c.JSON(info)
 }
+
+// GetStreamCharacteristics probes the upstream source to detect stream characteristics
+func (h *StreamHandler) GetStreamCharacteristics(c *fiber.Ctx) error {
+	id := c.Params("id")
+
+	stream := h.config.GetStream(id)
+	if stream == nil {
+		return c.Status(404).JSON(fiber.Map{
+			"error": "Stream not found",
+		})
+	}
+
+	chars, err := ffmpeg.ProbeStreamCharacteristics(stream.Upstream)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error":   "Failed to probe stream characteristics",
+			"details": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"stream_type":     string(chars.StreamType),
+		"segment_format":  string(chars.SegmentFormat),
+		"is_multi_variant": chars.IsMultiVariant,
+		"has_subtitles":   chars.HasSubtitles,
+		"has_audio":       chars.HasAudio,
+		"target_duration": chars.TargetDuration,
+		"max_bandwidth":   chars.MaxBandwidth,
+		"max_resolution":  chars.MaxResolution,
+		"variant_count":   chars.VariantCount,
+	})
+}

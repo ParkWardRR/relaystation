@@ -3,30 +3,28 @@
 	import { toast } from 'svelte-sonner';
 	import Badge from '$lib/components/ui/badge.svelte';
 	import Button from '$lib/components/ui/button.svelte';
-	import { streams, serverInfo, isLoading, liveStreams } from '$lib/stores/status';
-	import { api } from '$lib/api/client';
+	import { streams, serverInfo, isLoading } from '$lib/stores/status';
+	import { api, type StreamCharacteristics } from '$lib/api/client';
 	import { formatBitrate, formatResolution, getStreamUrl } from '$lib/utils';
 	import {
-		Radio,
-		Tv,
-		Copy,
-		ExternalLink,
-		Settings,
-		Server,
-		Clock,
-		Activity,
 		Play,
 		Pause,
 		Volume2,
 		VolumeX,
 		Maximize,
-		Wifi,
-		WifiOff,
-		Gauge,
-		Film,
-		MonitorPlay,
+		Copy,
 		Check,
-		Globe
+		ExternalLink,
+		Settings,
+		Radio,
+		Tv,
+		Info,
+		Zap,
+		Film,
+		Layers,
+		Clock,
+		Subtitles,
+		Music
 	} from 'lucide-svelte';
 
 	let videoElement: HTMLVideoElement;
@@ -34,33 +32,41 @@
 	let isPlaying = false;
 	let isMuted = true;
 	let currentStreamUrl = '';
-	let selectedStreamId = '';
 	let isVideoLoading = true;
 	let videoError = false;
 	let copied = false;
+	let vlcCopied = false;
 	let videoMounted = false;
+	let characteristics: StreamCharacteristics | null = null;
+	let loadingCharacteristics = false;
 
-	$: activeProfile = $streams
-		.flatMap((s) => s.profiles.map((p) => ({ ...p, streamName: s.name, streamId: s.id })))
-		.find((p) => p.live && p.enabled);
+	// Get first live stream
+	$: activeStream = $streams.find(s => s.enabled && s.profiles.some(p => p.live));
+	$: activeProfile = activeStream?.profiles.find(p => p.live && p.enabled);
 
-	$: totalStreams = $streams.length;
-	$: liveCount = $liveStreams.length;
-	$: totalProfiles = $streams.reduce((acc, s) => acc + s.profiles.length, 0);
-
-	async function handleCopy(path: string) {
+	async function loadCharacteristics() {
+		if (!activeStream) return;
+		loadingCharacteristics = true;
 		try {
-			const url = getStreamUrl(path);
-			// Try modern clipboard API first
+			characteristics = await api.getStreamCharacteristics(activeStream.id);
+		} catch (e) {
+			console.error('Failed to load characteristics:', e);
+			characteristics = null;
+		}
+		loadingCharacteristics = false;
+	}
+
+	async function handleCopy() {
+		if (!activeProfile) return;
+		try {
+			const url = getStreamUrl(activeProfile.path);
 			if (navigator.clipboard && window.isSecureContext) {
 				await navigator.clipboard.writeText(url);
 			} else {
-				// Fallback for HTTP or older browsers
 				const textArea = document.createElement('textarea');
 				textArea.value = url;
 				textArea.style.position = 'fixed';
 				textArea.style.left = '-999999px';
-				textArea.style.top = '-999999px';
 				document.body.appendChild(textArea);
 				textArea.focus();
 				textArea.select();
@@ -68,29 +74,54 @@
 				textArea.remove();
 			}
 			copied = true;
-			toast.success('Stream URL copied to clipboard');
+			toast.success('Stream URL copied!');
 			setTimeout(() => (copied = false), 2000);
 		} catch (err) {
-			console.error('Failed to copy:', err);
 			toast.error('Failed to copy URL');
+		}
+	}
+
+	function getVlcUrl(): string {
+		if (!activeProfile) return '';
+		const streamUrl = getStreamUrl(activeProfile.path);
+		// VLC can open URLs directly via vlc:// protocol or command line
+		return `vlc://${streamUrl.replace(/^https?:\/\//, '')}`;
+	}
+
+	async function handleVlcCopy() {
+		if (!activeProfile) return;
+		try {
+			const url = getStreamUrl(activeProfile.path);
+			if (navigator.clipboard && window.isSecureContext) {
+				await navigator.clipboard.writeText(url);
+			} else {
+				const textArea = document.createElement('textarea');
+				textArea.value = url;
+				textArea.style.position = 'fixed';
+				textArea.style.left = '-999999px';
+				document.body.appendChild(textArea);
+				textArea.focus();
+				textArea.select();
+				document.execCommand('copy');
+				textArea.remove();
+			}
+			vlcCopied = true;
+			toast.success('Open VLC and paste this URL (Ctrl+N / Cmd+N)');
+			setTimeout(() => (vlcCopied = false), 3000);
+		} catch (err) {
+			toast.error('Failed to copy');
 		}
 	}
 
 	async function initHls(url: string) {
 		if (!url) return;
-
-		// Wait for video element to be available
 		await tick();
-		if (!videoElement) {
-			console.error('Video element not ready');
-			return;
-		}
+		if (!videoElement) return;
 
 		isVideoLoading = true;
 		videoError = false;
 
 		try {
-			// Dynamically import HLS.js
 			const Hls = (await import('hls.js')).default;
 
 			if (hls) {
@@ -112,20 +143,16 @@
 
 				hls.on(Hls.Events.MANIFEST_PARSED, () => {
 					isVideoLoading = false;
-					// Auto-play when stream loads
 					videoElement.play().catch(() => {});
 				});
 
 				hls.on(Hls.Events.ERROR, (_event: any, data: any) => {
-					console.error('HLS Error:', data);
 					if (data.fatal) {
 						switch (data.type) {
 							case Hls.ErrorTypes.NETWORK_ERROR:
-								console.error('Network error, trying to recover...');
 								hls.startLoad();
 								break;
 							case Hls.ErrorTypes.MEDIA_ERROR:
-								console.error('Media error, trying to recover...');
 								hls.recoverMediaError();
 								break;
 							default:
@@ -137,7 +164,6 @@
 					}
 				});
 			} else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-				// Safari native HLS support
 				videoElement.src = url;
 				videoElement.addEventListener('loadedmetadata', () => {
 					isVideoLoading = false;
@@ -150,20 +176,17 @@
 			} else {
 				videoError = true;
 				isVideoLoading = false;
-				toast.error('HLS playback not supported in this browser');
 			}
 		} catch (err) {
-			console.error('Failed to initialize HLS:', err);
 			videoError = true;
 			isVideoLoading = false;
 		}
 	}
 
-	function selectStream(profile: any) {
-		if (!profile) return;
-		const url = getStreamUrl(profile.path);
+	function selectStream() {
+		if (!activeProfile) return;
+		const url = getStreamUrl(activeProfile.path);
 		currentStreamUrl = url;
-		selectedStreamId = profile.id;
 		initHls(url);
 	}
 
@@ -191,21 +214,13 @@
 		}
 	}
 
-	// Called when video element is mounted
 	function onVideoMount(node: HTMLVideoElement) {
 		videoElement = node;
 		videoMounted = true;
-
-		// If we already have an active profile, load it
 		if (activeProfile && !currentStreamUrl) {
-			selectStream(activeProfile);
+			selectStream();
 		}
-
-		return {
-			destroy() {
-				videoMounted = false;
-			}
-		};
+		return { destroy() { videoMounted = false; } };
 	}
 
 	onMount(async () => {
@@ -216,421 +231,326 @@
 		}
 	});
 
-	// Auto-select first live stream when data loads and video is ready
 	$: if (activeProfile && !currentStreamUrl && videoMounted) {
-		selectStream(activeProfile);
+		selectStream();
+	}
+
+	$: if (activeStream && !characteristics && !loadingCharacteristics) {
+		loadCharacteristics();
 	}
 
 	onDestroy(() => {
-		if (hls) {
-			hls.destroy();
-		}
+		if (hls) hls.destroy();
 	});
+
+	function formatBandwidth(bw: number): string {
+		if (!bw) return '-';
+		if (bw >= 1000000) return `${(bw / 1000000).toFixed(1)} Mbps`;
+		if (bw >= 1000) return `${(bw / 1000).toFixed(0)} kbps`;
+		return `${bw} bps`;
+	}
 </script>
 
-<div class="min-h-screen animated-gradient relative overflow-hidden">
-	<!-- Background effects -->
-	<div class="noise-overlay"></div>
-	<div class="hero-glow -top-40 -left-40 opacity-50"></div>
-	<div class="hero-glow -bottom-40 -right-40 opacity-30"></div>
-	<div class="grid-pattern fixed inset-0 opacity-30"></div>
-
-	<div class="container mx-auto px-4 py-6 sm:py-8 max-w-7xl relative z-10">
+<div class="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950">
+	<div class="container mx-auto px-4 py-8 max-w-5xl">
 		<!-- Header -->
-		<header class="mb-8 sm:mb-12 animate-fade-in">
-			<div class="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-0">
-				<div class="flex items-center gap-3">
-					<div class="p-3 rounded-2xl bg-primary/10 border border-primary/20 glow-primary">
-						<Radio class="h-7 w-7 sm:h-8 sm:w-8 text-primary" />
-					</div>
-					<div>
-						<h1 class="text-3xl sm:text-4xl font-bold tracking-tight gradient-text">
-							RelayStation
-						</h1>
-						<p class="text-muted-foreground text-sm sm:text-base">
-							HLS Streaming Relay & Transcoder
-						</p>
-					</div>
+		<header class="flex items-center justify-between mb-8">
+			<div class="flex items-center gap-3">
+				<div class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+					<Radio class="h-6 w-6 text-emerald-500" />
 				</div>
-
-				<div class="flex items-center gap-3">
-					{#if $serverInfo}
-						<div class="hidden sm:flex items-center gap-4 px-4 py-2 rounded-full glass text-sm">
-							<div class="flex items-center gap-2 text-muted-foreground">
-								<div class="connection-dot connected"></div>
-								<span>Connected</span>
-							</div>
-							<div class="h-4 w-px bg-border"></div>
-							<div class="flex items-center gap-1.5">
-								<Clock class="h-3.5 w-3.5 text-muted-foreground" />
-								<span class="text-muted-foreground">{$serverInfo.uptime}</span>
-							</div>
-						</div>
-					{/if}
-					<Button variant="outline" href="/admin" class="glass-hover border-primary/20">
-						<Settings class="h-4 w-4 mr-2" />
-						<span class="hidden sm:inline">Admin</span>
-					</Button>
+				<div>
+					<h1 class="text-2xl font-bold text-white">RelayStation</h1>
+					<p class="text-sm text-zinc-500">HLS Streaming Relay</p>
 				</div>
 			</div>
+			<Button variant="ghost" href="/admin" class="text-zinc-400 hover:text-white">
+				<Settings class="h-4 w-4 mr-2" />
+				Admin
+			</Button>
 		</header>
 
-		<!-- Stats Row -->
-		<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-8 stagger-children">
-			<div class="stat-card glass rounded-xl p-4 border border-border/50">
-				<div class="flex items-center gap-3">
-					<div class="p-2 rounded-lg bg-primary/10">
-						<Film class="h-5 w-5 text-primary" />
-					</div>
-					<div>
-						<p class="text-2xl font-bold">{totalStreams}</p>
-						<p class="text-xs text-muted-foreground">Total Streams</p>
-					</div>
-				</div>
-			</div>
-			<div class="stat-card glass rounded-xl p-4 border border-border/50">
-				<div class="flex items-center gap-3">
-					<div class="p-2 rounded-lg bg-emerald-500/10">
-						<Activity class="h-5 w-5 text-emerald-500" />
-					</div>
-					<div>
-						<p class="text-2xl font-bold text-emerald-500">{liveCount}</p>
-						<p class="text-xs text-muted-foreground">Live Now</p>
-					</div>
-				</div>
-			</div>
-			<div class="stat-card glass rounded-xl p-4 border border-border/50">
-				<div class="flex items-center gap-3">
-					<div class="p-2 rounded-lg bg-blue-500/10">
-						<Gauge class="h-5 w-5 text-blue-500" />
-					</div>
-					<div>
-						<p class="text-2xl font-bold">{totalProfiles}</p>
-						<p class="text-xs text-muted-foreground">Profiles</p>
-					</div>
-				</div>
-			</div>
-			<div class="stat-card glass rounded-xl p-4 border border-border/50">
-				<div class="flex items-center gap-3">
-					<div class="p-2 rounded-lg bg-purple-500/10">
-						<Globe class="h-5 w-5 text-purple-500" />
-					</div>
-					<div>
-						<p class="text-lg font-bold truncate" title={$serverInfo?.public_ip || $serverInfo?.hostname || '-'}>
-							{$serverInfo?.public_ip || $serverInfo?.hostname || '-'}
-						</p>
-						<p class="text-xs text-muted-foreground truncate" title={$serverInfo?.reverse_dns || 'Server'}>
-							{$serverInfo?.reverse_dns || 'Server'}
-						</p>
-					</div>
-				</div>
-			</div>
-		</div>
-
 		{#if $isLoading}
-			<!-- Loading State -->
-			<div class="space-y-6">
-				<div class="aspect-video rounded-2xl skeleton"></div>
-				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{#each [1, 2, 3] as _}
-						<div class="h-40 rounded-xl skeleton"></div>
-					{/each}
-				</div>
+			<div class="flex items-center justify-center py-32">
+				<div class="w-8 h-8 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin"></div>
 			</div>
-		{:else if $streams.length === 0}
-			<!-- Empty State -->
-			<div class="flex flex-col items-center justify-center py-20 animate-fade-in">
-				<div class="p-6 rounded-full bg-muted/50 mb-6">
-					<Tv class="h-16 w-16 text-muted-foreground" />
+		{:else if !activeStream || !activeProfile}
+			<!-- No Active Stream -->
+			<div class="flex flex-col items-center justify-center py-24 text-center">
+				<div class="p-6 rounded-2xl bg-zinc-800/50 mb-6">
+					<Tv class="h-16 w-16 text-zinc-600" />
 				</div>
-				<h2 class="text-2xl font-semibold mb-2">No Streams Configured</h2>
-				<p class="text-muted-foreground mb-6 text-center max-w-md">
-					Get started by adding your first stream in the admin panel. You can configure multiple
-					streams with different transcoding profiles.
+				<h2 class="text-xl font-semibold text-white mb-2">No Active Stream</h2>
+				<p class="text-zinc-500 mb-6 max-w-md">
+					Configure and enable a stream in the admin panel to start watching.
 				</p>
-				<Button href="/admin" size="lg" class="glow-primary">
-					<Settings class="h-5 w-5 mr-2" />
-					Open Admin Panel
+				<Button href="/admin" class="bg-emerald-600 hover:bg-emerald-700">
+					<Settings class="h-4 w-4 mr-2" />
+					Open Admin
 				</Button>
 			</div>
 		{:else}
 			<!-- Main Content -->
-			<div class="grid lg:grid-cols-3 gap-6">
-				<!-- Video Player Section -->
-				<div class="lg:col-span-2 space-y-4 animate-fade-in-up">
-					<div
-						class="video-container aspect-video rounded-2xl border border-border/50 glow-primary-intense relative overflow-hidden"
-					>
-						{#if activeProfile}
-							<!-- svelte-ignore a11y-media-has-caption -->
-							<video
-								use:onVideoMount
-								class="w-full h-full"
-								muted={isMuted}
-								playsinline
-								autoplay
-								on:play={() => (isPlaying = true)}
-								on:pause={() => (isPlaying = false)}
-							></video>
+			<div class="space-y-6">
+				<!-- Video Player -->
+				<div class="relative rounded-2xl overflow-hidden bg-black border border-zinc-800 shadow-2xl">
+					<div class="aspect-video">
+						<!-- svelte-ignore a11y-media-has-caption -->
+						<video
+							use:onVideoMount
+							class="w-full h-full object-contain bg-black"
+							muted={isMuted}
+							playsinline
+							autoplay
+							on:play={() => (isPlaying = true)}
+							on:pause={() => (isPlaying = false)}
+						></video>
 
-							<!-- Video Overlay -->
-							<div class="video-overlay"></div>
-
-							<!-- Loading Spinner -->
-							{#if isVideoLoading}
-								<div class="absolute inset-0 flex items-center justify-center bg-black/50">
-									<div
-										class="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin"
-									></div>
-								</div>
-							{/if}
-
-							<!-- Error State -->
-							{#if videoError}
-								<div class="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
-									<WifiOff class="h-12 w-12 text-destructive mb-4" />
-									<p class="text-destructive font-medium">Failed to load stream</p>
-									<Button
-										variant="outline"
-										size="sm"
-										class="mt-4"
-										on:click={() => initHls(currentStreamUrl)}
-									>
-										Retry
-									</Button>
-								</div>
-							{/if}
-
-							<!-- Controls -->
-							<div
-								class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent"
-							>
-								<div class="flex items-center justify-between">
-									<div class="flex items-center gap-3">
-										<button
-											on:click={togglePlay}
-											class="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-											aria-label={isPlaying ? 'Pause' : 'Play'}
-										>
-											{#if isPlaying}
-												<Pause class="h-5 w-5" />
-											{:else}
-												<Play class="h-5 w-5" />
-											{/if}
-										</button>
-										<button
-											on:click={toggleMute}
-											class="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-											aria-label={isMuted ? 'Unmute' : 'Mute'}
-										>
-											{#if isMuted}
-												<VolumeX class="h-5 w-5" />
-											{:else}
-												<Volume2 class="h-5 w-5" />
-											{/if}
-										</button>
-									</div>
-
-									<div class="flex items-center gap-3">
-										{#if activeProfile}
-											<Badge variant="secondary" class="bg-white/10 text-white border-0">
-												{activeProfile.codec?.toUpperCase() || 'PASSTHROUGH'}
-												{#if activeProfile.resolution}
-													• {formatResolution(activeProfile.resolution)}
-												{/if}
-											</Badge>
-										{/if}
-										<button
-											on:click={toggleFullscreen}
-											class="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-											aria-label="Toggle fullscreen"
-										>
-											<Maximize class="h-5 w-5" />
-										</button>
-									</div>
-								</div>
-							</div>
-						{:else}
-							<!-- No Active Stream -->
-							<div class="absolute inset-0 flex flex-col items-center justify-center">
-								<MonitorPlay class="h-16 w-16 text-muted-foreground mb-4" />
-								<p class="text-muted-foreground">No active streams</p>
-								<p class="text-sm text-muted-foreground/70 mt-1">
-									Enable a stream to start watching
-								</p>
+						{#if isVideoLoading}
+							<div class="absolute inset-0 flex items-center justify-center bg-black/60">
+								<div class="w-10 h-10 border-3 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin"></div>
 							</div>
 						{/if}
-					</div>
 
-					<!-- Stream Info Bar -->
-					{#if activeProfile}
-						<div
-							class="glass rounded-xl p-4 border border-border/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-						>
-							<div class="flex items-center gap-3">
-								<div class="relative">
-									<div
-										class="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"
-									></div>
-								</div>
-								<div>
-									<h3 class="font-semibold">{activeProfile.streamName}</h3>
-									<p class="text-sm text-muted-foreground">
-										{formatBitrate(activeProfile.bitrate)} •
-										{formatResolution(activeProfile.resolution)}
-									</p>
-								</div>
+						{#if videoError}
+							<div class="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
+								<p class="text-red-400 mb-4">Failed to load stream</p>
+								<Button variant="outline" size="sm" on:click={() => initHls(currentStreamUrl)}>
+									Retry
+								</Button>
 							</div>
-							<div class="flex items-center gap-2 w-full sm:w-auto">
-								<Button
-									variant="secondary"
-									size="sm"
-									class="flex-1 sm:flex-none"
-									on:click={() => handleCopy(activeProfile.path)}
-								>
-									{#if copied}
-										<Check class="h-4 w-4 mr-2 text-emerald-500" />
-										Copied!
-									{:else}
-										<Copy class="h-4 w-4 mr-2" />
-										Copy URL
-									{/if}
-								</Button>
-								<Button
-									variant="ghost"
-									size="sm"
-									on:click={() => window.open(getStreamUrl(activeProfile.path), '_blank')}
-								>
-									<ExternalLink class="h-4 w-4" />
-								</Button>
+						{/if}
+
+						<!-- Video Controls -->
+						<div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
+							<div class="flex items-center justify-between">
+								<div class="flex items-center gap-2">
+									<button
+										on:click={togglePlay}
+										class="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+									>
+										{#if isPlaying}
+											<Pause class="h-5 w-5 text-white" />
+										{:else}
+											<Play class="h-5 w-5 text-white" />
+										{/if}
+									</button>
+									<button
+										on:click={toggleMute}
+										class="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+									>
+										{#if isMuted}
+											<VolumeX class="h-5 w-5 text-white" />
+										{:else}
+											<Volume2 class="h-5 w-5 text-white" />
+										{/if}
+									</button>
+									<div class="ml-3 flex items-center gap-2">
+										<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+										<span class="text-sm text-white font-medium">{activeStream.name}</span>
+									</div>
+								</div>
+								<div class="flex items-center gap-2">
+									<Badge class="bg-zinc-800 text-zinc-300 border-zinc-700">
+										{activeProfile.codec?.toUpperCase() || 'COPY'}
+										{#if activeProfile.resolution}
+											• {formatResolution(activeProfile.resolution)}
+										{/if}
+									</Badge>
+									<button
+										on:click={toggleFullscreen}
+										class="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+									>
+										<Maximize class="h-5 w-5 text-white" />
+									</button>
+								</div>
 							</div>
 						</div>
-					{/if}
+					</div>
 				</div>
 
-				<!-- Stream List Sidebar -->
-				<div class="space-y-4 animate-fade-in-up" style="animation-delay: 0.2s;">
-					<div class="flex items-center justify-between">
-						<h2 class="text-lg font-semibold">Available Streams</h2>
-						<Badge variant="outline" class="text-xs">
-							{$streams.length} stream{$streams.length !== 1 ? 's' : ''}
-						</Badge>
+				<!-- Quick Actions -->
+				<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+					<button
+						on:click={handleCopy}
+						class="flex items-center justify-center gap-2 p-4 rounded-xl bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-zinc-600 transition-all group"
+					>
+						{#if copied}
+							<Check class="h-5 w-5 text-emerald-500" />
+							<span class="text-emerald-500 font-medium">Copied!</span>
+						{:else}
+							<Copy class="h-5 w-5 text-zinc-400 group-hover:text-white transition-colors" />
+							<span class="text-zinc-300 group-hover:text-white transition-colors">Copy Stream URL</span>
+						{/if}
+					</button>
+
+					<button
+						on:click={handleVlcCopy}
+						class="flex items-center justify-center gap-2 p-4 rounded-xl bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-zinc-600 transition-all group"
+					>
+						{#if vlcCopied}
+							<Check class="h-5 w-5 text-emerald-500" />
+							<span class="text-emerald-500 font-medium">Now paste in VLC!</span>
+						{:else}
+							<Play class="h-5 w-5 text-orange-400 group-hover:text-orange-300 transition-colors" />
+							<span class="text-zinc-300 group-hover:text-white transition-colors">Open in VLC</span>
+						{/if}
+					</button>
+
+					<button
+						on:click={() => window.open(getStreamUrl(activeProfile.path), '_blank')}
+						class="flex items-center justify-center gap-2 p-4 rounded-xl bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-zinc-600 transition-all group"
+					>
+						<ExternalLink class="h-5 w-5 text-zinc-400 group-hover:text-white transition-colors" />
+						<span class="text-zinc-300 group-hover:text-white transition-colors">Direct Link</span>
+					</button>
+				</div>
+
+				<!-- Stream Info Cards -->
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<!-- Stream Details -->
+					<div class="p-5 rounded-xl bg-zinc-800/30 border border-zinc-700/50">
+						<h3 class="text-sm font-medium text-zinc-400 mb-4 flex items-center gap-2">
+							<Info class="h-4 w-4" />
+							Stream Details
+						</h3>
+						<div class="space-y-3">
+							<div class="flex justify-between">
+								<span class="text-zinc-500">Name</span>
+								<span class="text-white font-medium">{activeStream.name}</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-zinc-500">Codec</span>
+								<span class="text-white">{activeProfile.codec?.toUpperCase() || 'Passthrough'}</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-zinc-500">Resolution</span>
+								<span class="text-white">{formatResolution(activeProfile.resolution)}</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-zinc-500">Bitrate</span>
+								<span class="text-white">{formatBitrate(activeProfile.bitrate)}</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-zinc-500">Status</span>
+								<Badge class="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+									<span class="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse"></span>
+									Live
+								</Badge>
+							</div>
+						</div>
 					</div>
 
-					<div class="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-						{#each $streams as stream (stream.id)}
-							<div
-								class="stream-card glass rounded-xl p-4 border border-border/50"
-								class:animate-border-glow={stream.profiles.some((p) => p.live)}
-							>
-								<div class="flex items-start justify-between mb-3">
-									<div class="flex-1 min-w-0">
-										<h3 class="font-semibold truncate">{stream.name}</h3>
-										<p class="text-xs text-muted-foreground font-mono truncate">
-											{stream.id}
-										</p>
-									</div>
-									<div class="ml-2 flex-shrink-0">
-										{#if stream.enabled && stream.profiles.some((p) => p.live)}
-											<Badge variant="default" class="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
-												<span class="relative flex h-2 w-2 mr-1.5">
-													<span
-														class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
-													></span>
-													<span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"
-													></span>
-												</span>
-												Live
-											</Badge>
-										{:else if stream.enabled}
-											<Badge variant="secondary">Starting</Badge>
-										{:else}
-											<Badge variant="outline">Disabled</Badge>
-										{/if}
-									</div>
+					<!-- Source Characteristics -->
+					<div class="p-5 rounded-xl bg-zinc-800/30 border border-zinc-700/50">
+						<h3 class="text-sm font-medium text-zinc-400 mb-4 flex items-center gap-2">
+							<Zap class="h-4 w-4" />
+							Source Info
+						</h3>
+						{#if loadingCharacteristics}
+							<div class="flex items-center justify-center py-6">
+								<div class="w-5 h-5 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin"></div>
+							</div>
+						{:else if characteristics}
+							<div class="space-y-3">
+								<div class="flex justify-between items-center">
+									<span class="text-zinc-500 flex items-center gap-2">
+										<Film class="h-3.5 w-3.5" />
+										Type
+									</span>
+									<Badge class={characteristics.stream_type === 'live' ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/30'}>
+										{characteristics.stream_type.toUpperCase()}
+									</Badge>
 								</div>
-
-								<div class="mb-3 p-2 rounded-lg bg-background/30">
-									<div class="flex items-center gap-2 text-xs">
-										{#if stream.upstream_live}
-											<Wifi class="h-3.5 w-3.5 text-emerald-500" />
-											<span class="text-emerald-500">Upstream Connected</span>
-										{:else}
-											<WifiOff class="h-3.5 w-3.5 text-destructive" />
-											<span class="text-destructive">Upstream Offline</span>
-										{/if}
-									</div>
+								<div class="flex justify-between items-center">
+									<span class="text-zinc-500 flex items-center gap-2">
+										<Layers class="h-3.5 w-3.5" />
+										Format
+									</span>
+									<span class="text-white">{characteristics.segment_format.toUpperCase()}</span>
 								</div>
-
-								{#if stream.profiles.length > 0}
-									<div class="space-y-2">
-										{#each stream.profiles as profile (profile.id)}
-											<button
-												class="w-full p-3 rounded-lg border bg-background/30 hover:bg-background/50 transition-all text-left group {selectedStreamId ===
-												profile.id
-													? 'border-primary bg-primary/10'
-													: 'border-border/50'}"
-												on:click={() => selectStream({ ...profile, streamName: stream.name })}
-											>
-												<div class="flex items-center justify-between mb-1">
-													<div class="flex items-center gap-2">
-														<span class="font-medium text-sm">
-															{profile.codec?.toUpperCase() || 'Passthrough'}
-														</span>
-														{#if profile.resolution}
-															<Badge variant="outline" class="text-xs py-0">
-																{formatResolution(profile.resolution)}
-															</Badge>
-														{/if}
-													</div>
-													{#if profile.live}
-														<span class="text-xs text-emerald-500 flex items-center gap-1">
-															<span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"
-															></span>
-															Live
-														</span>
-													{:else if profile.running}
-														<span class="text-xs text-yellow-500">Buffering</span>
-													{/if}
-												</div>
-
-												<div class="flex items-center justify-between">
-													<span class="text-xs text-muted-foreground">
-														{formatBitrate(profile.bitrate)}
-													</span>
-													<div
-														class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
-													>
-														<Play class="h-3 w-3 text-primary" />
-														<span class="text-xs text-primary">Play</span>
-													</div>
-												</div>
-											</button>
-										{/each}
+								{#if characteristics.is_multi_variant}
+									<div class="flex justify-between items-center">
+										<span class="text-zinc-500 flex items-center gap-2">
+											<Layers class="h-3.5 w-3.5" />
+											Variants
+										</span>
+										<span class="text-white">{characteristics.variant_count} quality levels</span>
 									</div>
-								{:else}
-									<p class="text-xs text-muted-foreground text-center py-2">
-										No profiles configured
-									</p>
+								{/if}
+								{#if characteristics.max_bandwidth}
+									<div class="flex justify-between items-center">
+										<span class="text-zinc-500 flex items-center gap-2">
+											<Zap class="h-3.5 w-3.5" />
+											Max Bitrate
+										</span>
+										<span class="text-white">{formatBandwidth(characteristics.max_bandwidth)}</span>
+									</div>
+								{/if}
+								{#if characteristics.max_resolution}
+									<div class="flex justify-between items-center">
+										<span class="text-zinc-500 flex items-center gap-2">
+											<Tv class="h-3.5 w-3.5" />
+											Max Resolution
+										</span>
+										<span class="text-white">{characteristics.max_resolution}</span>
+									</div>
+								{/if}
+								<div class="flex justify-between items-center">
+									<span class="text-zinc-500 flex items-center gap-2">
+										<Music class="h-3.5 w-3.5" />
+										Audio
+									</span>
+									<span class="text-white">{characteristics.has_audio ? 'Yes' : 'No'}</span>
+								</div>
+								{#if characteristics.has_subtitles}
+									<div class="flex justify-between items-center">
+										<span class="text-zinc-500 flex items-center gap-2">
+											<Subtitles class="h-3.5 w-3.5" />
+											Subtitles
+										</span>
+										<span class="text-white">Available</span>
+									</div>
 								{/if}
 							</div>
-						{/each}
+						{:else}
+							<p class="text-zinc-500 text-sm text-center py-4">Unable to load source info</p>
+						{/if}
+					</div>
+				</div>
+
+				<!-- URL Display -->
+				<div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
+					<div class="flex items-center justify-between gap-4">
+						<div class="flex-1 min-w-0">
+							<p class="text-xs text-zinc-500 mb-1">Stream URL</p>
+							<code class="text-sm text-emerald-400 font-mono break-all">{getStreamUrl(activeProfile.path)}</code>
+						</div>
+						<Button variant="ghost" size="sm" on:click={handleCopy} class="shrink-0">
+							{#if copied}
+								<Check class="h-4 w-4 text-emerald-500" />
+							{:else}
+								<Copy class="h-4 w-4" />
+							{/if}
+						</Button>
 					</div>
 				</div>
 			</div>
 		{/if}
 
 		<!-- Footer -->
-		<footer class="mt-12 sm:mt-16 text-center animate-fade-in" style="animation-delay: 0.4s;">
-			<div class="glass rounded-full inline-flex items-center gap-4 px-6 py-3 text-sm text-muted-foreground">
-				<span>RelayStation</span>
-				<span class="text-border">•</span>
-				<span>Self-hosted HLS Relay</span>
+		<footer class="mt-12 text-center">
+			<p class="text-sm text-zinc-600">
+				RelayStation
 				{#if $serverInfo?.version}
-					<span class="text-border">•</span>
+					<span class="text-zinc-700">•</span>
 					<span>v{$serverInfo.version}</span>
 				{/if}
-			</div>
+				{#if $serverInfo?.public_ip}
+					<span class="text-zinc-700">•</span>
+					<span>{$serverInfo.public_ip}</span>
+				{/if}
+			</p>
 		</footer>
 	</div>
 </div>
