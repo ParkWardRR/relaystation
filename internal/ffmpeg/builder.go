@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 
@@ -10,10 +11,11 @@ import (
 
 // Builder constructs FFmpeg commands for transcoding
 type Builder struct {
-	profile   *models.Profile
-	upstream  string
-	outputDir string
-	defaults  models.Defaults
+	profile         *models.Profile
+	upstream        string
+	outputDir       string
+	defaults        models.Defaults
+	characteristics *StreamCharacteristics
 }
 
 // NewBuilder creates a new FFmpeg command builder
@@ -26,16 +28,23 @@ func NewBuilder(profile *models.Profile, upstream, outputDir string, defaults mo
 	}
 }
 
-// Build constructs the full FFmpeg command
+// SetCharacteristics sets the stream characteristics for dynamic option selection
+func (b *Builder) SetCharacteristics(chars *StreamCharacteristics) {
+	b.characteristics = chars
+}
+
+// Build constructs the full FFmpeg command with dynamic options based on stream type
 func (b *Builder) Build() []string {
 	p := b.profile
 
-	// Base command - keep it simple for best HLS compatibility
-	// Let FFmpeg auto-select the best video/audio streams from master playlist
-	cmd := []string{
-		"ffmpeg", "-hide_banner", "-loglevel", "warning",
-		"-i", b.upstream,
-	}
+	// Base command
+	cmd := []string{"ffmpeg", "-hide_banner", "-loglevel", "warning"}
+
+	// Add input options based on stream characteristics
+	cmd = append(cmd, b.buildInputOptions()...)
+
+	// Input
+	cmd = append(cmd, "-i", b.upstream)
 
 	// If passthrough, just copy streams
 	if p.Passthrough {
@@ -152,6 +161,53 @@ func (b *Builder) buildHLSOutput() []string {
 		"-hls_segment_type", "mpegts",
 		"-hls_segment_filename", filepath.Join(b.outputDir, "segment_%03d.ts"),
 		outputPath,
+	}
+
+	return cmd
+}
+
+// buildInputOptions generates input options based on stream characteristics
+func (b *Builder) buildInputOptions() []string {
+	var cmd []string
+
+	// If no characteristics available, use safe defaults (no special options)
+	if b.characteristics == nil {
+		log.Printf("[FFmpeg] No stream characteristics available, using defaults")
+		return cmd
+	}
+
+	chars := b.characteristics
+	log.Printf("[FFmpeg] Stream type: %s, format: %s, multi-variant: %v, variants: %d",
+		chars.StreamType, chars.SegmentFormat, chars.IsMultiVariant, chars.VariantCount)
+
+	// For LIVE streams, add reconnection options
+	if chars.StreamType == StreamTypeLive {
+		cmd = append(cmd,
+			"-reconnect", "1",
+			"-reconnect_streamed", "1",
+			"-reconnect_delay_max", "5",
+			"-reconnect_on_network_error", "1",
+		)
+		log.Printf("[FFmpeg] Live stream detected - enabling reconnection")
+	}
+
+	// For VOD streams, don't add reconnection options (they cause EOF loops)
+	if chars.StreamType == StreamTypeVOD {
+		log.Printf("[FFmpeg] VOD stream detected - no reconnection options")
+		// No special options needed - FFmpeg handles VOD well by default
+	}
+
+	// For fMP4 streams, use slightly larger probe size for better demuxing
+	// but don't go overboard - let FFmpeg auto-select streams
+	if chars.SegmentFormat == SegmentFormatFMP4 {
+		log.Printf("[FFmpeg] fMP4 format detected - using default demuxer (no special options needed)")
+		// FFmpeg's HLS demuxer handles fMP4 well without special options
+	}
+
+	// For multi-variant playlists with many variants, FFmpeg handles selection automatically
+	if chars.IsMultiVariant && chars.VariantCount > 1 {
+		log.Printf("[FFmpeg] Multi-variant playlist with %d variants - letting FFmpeg auto-select", chars.VariantCount)
+		// FFmpeg selects highest bandwidth by default, which is what we want
 	}
 
 	return cmd
