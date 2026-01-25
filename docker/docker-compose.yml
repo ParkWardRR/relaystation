@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  relaystation:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: relaystation
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../configs/streams.json:/etc/relaystation/streams.json
+      - hls-data:/var/www/hls
+    environment:
+      - RELAYSTATION_CONFIG=/etc/relaystation/streams.json
+      - RELAYSTATION_OUTPUT=/var/www/hls
+      - RELAYSTATION_STATIC=/app/web/build
+      - RELAYSTATION_ADDR=:8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  hls-data:
+    driver: local
