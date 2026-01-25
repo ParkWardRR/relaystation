@@ -55,8 +55,17 @@ func (p *Process) Start(ctx context.Context) error {
 		return err
 	}
 
-	// Build command
+	// Probe the upstream to detect stream characteristics
+	log.Printf("[FFmpeg] Probing upstream: %s", p.upstream)
+	chars, err := ProbeStreamCharacteristics(p.upstream)
+	if err != nil {
+		log.Printf("[FFmpeg] Failed to probe stream characteristics: %v (using defaults)", err)
+		chars = nil
+	}
+
+	// Build command with characteristics
 	builder := NewBuilder(p.profile, p.upstream, outputDir, p.defaults)
+	builder.SetCharacteristics(chars)
 	args := builder.Build()
 
 	// Create context with cancel
