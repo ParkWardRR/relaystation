@@ -30,21 +30,10 @@ func NewBuilder(profile *models.Profile, upstream, outputDir string, defaults mo
 func (b *Builder) Build() []string {
 	p := b.profile
 
-	// Base command with low-latency input options
+	// Base command - keep it simple for best HLS compatibility
+	// Let FFmpeg auto-select the best video/audio streams from master playlist
 	cmd := []string{
 		"ffmpeg", "-hide_banner", "-loglevel", "warning",
-		// Low-latency input options
-		"-fflags", "+genpts+discardcorrupt",
-		"-flags", "low_delay",
-		"-strict", "experimental",
-		// Reconnection options
-		"-reconnect", "1",
-		"-reconnect_at_eof", "1",
-		"-reconnect_streamed", "1",
-		"-reconnect_delay_max", "3",
-		"-reconnect_on_network_error", "1",
-		"-reconnect_on_http_error", "4xx,5xx",
-		// Input
 		"-i", b.upstream,
 	}
 
