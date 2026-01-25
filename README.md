@@ -474,6 +474,6 @@ This project is licensed under the [Blue Oak Model License 1.0.0](LICENSE).
 
 **[⬆ Back to Top](#relaystation)**
 
-Made with ❤️ for the streaming community
+ Built for streaming flexibility 
 
 </div>
