@@ -11,13 +11,13 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-Powered-007808?style=for-the-badge&logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
 
-[![GitHub Release](https://img.shields.io/github/v/release/ParkWardRR/relaystation?style=for-the-badge&logo=github)](https://github.com/ParkWardRR/relaystation/releases)
+[![Release](https://img.shields.io/badge/Release-v1.0.0-blue?style=for-the-badge&logo=github)](https://github.com/ParkWardRR/relaystation/releases/tag/v1.0.0)
 [![GitHub Stars](https://img.shields.io/github/stars/ParkWardRR/relaystation?style=for-the-badge&logo=github)](https://github.com/ParkWardRR/relaystation/stargazers)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen?style=for-the-badge)](https://github.com/ParkWardRR/relaystation/pulls)
 
 ---
 
-[Features](#features) • [Installation](#installation) • [Configuration](#configuration) • [API](#api-endpoints) • [Development](#development)
+[Features](#features) • [Installation](#installation) • [Configuration](#configuration) • [API](#api-endpoints)
 
 </div>
 
@@ -65,22 +65,46 @@
 
 ## Installation
 
-Choose your platform below for detailed setup instructions.
+Choose your platform below. Each includes both development and production setup.
 
-### 🍎 macOS + OrbStack (Development)
+---
 
-> Perfect for local development and testing with OrbStack's lightweight Docker environment.
+### 🍎 macOS + OrbStack
 
-**Prerequisites:**
-- [OrbStack](https://orbstack.dev/) installed
+#### Prerequisites
+
+- [OrbStack](https://orbstack.dev/) installed (or Docker Desktop)
 - Git
+
+#### Development Setup
+
+```bash
+# Install dev tools via Homebrew
+brew install go node ffmpeg
+
+# Clone the repository
+git clone https://github.com/ParkWardRR/relaystation.git
+cd relaystation
+
+# Install frontend dependencies
+make web-install
+
+# Option 1: Run backend + frontend separately (hot reload)
+make web-dev          # Terminal 1: Frontend dev server
+make dev              # Terminal 2: Backend
+
+# Option 2: Development Docker Compose
+docker compose -f docker/docker-compose.dev.yml up
+```
+
+#### Production Setup
 
 ```bash
 # Clone the repository
 git clone https://github.com/ParkWardRR/relaystation.git
 cd relaystation
 
-# Start with Docker Compose (OrbStack handles Docker automatically)
+# Build and start with Docker Compose
 docker compose -f docker/docker-compose.yml up -d
 
 # View logs
@@ -90,28 +114,44 @@ docker compose -f docker/docker-compose.yml logs -f
 open http://localhost:8080
 ```
 
-**Development Mode (with hot reload):**
+**Auto-start on login (launchd):**
+
+Create `~/Library/LaunchAgents/com.relaystation.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.relaystation</string>
+    <key>WorkingDirectory</key>
+    <string>/path/to/relaystation</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/docker</string>
+        <string>compose</string>
+        <string>-f</string>
+        <string>docker/docker-compose.yml</string>
+        <string>up</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>
+```
 
 ```bash
-# Install prerequisites via Homebrew
-brew install go node ffmpeg
-
-# Build and run locally
-make web-install
-make web-build
-make dev
-
-# Or use development Docker Compose
-docker compose -f docker/docker-compose.dev.yml up
+launchctl load ~/Library/LaunchAgents/com.relaystation.plist
 ```
 
 ---
 
-### 🐧 AlmaLinux (Production Server)
+### 🐧 AlmaLinux
 
-> Recommended for production deployments on RHEL-compatible systems.
-
-**Step 1: Install Dependencies**
+#### Prerequisites
 
 ```bash
 # Update system
@@ -129,7 +169,30 @@ sudo systemctl enable docker
 sudo usermod -aG docker $USER
 ```
 
-**Step 2: Deploy RelayStation**
+#### Development Setup
+
+```bash
+# Install dev tools
+sudo dnf install -y golang nodejs npm
+sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+sudo dnf install -y ffmpeg --enablerepo=epel
+
+# Clone the repository
+git clone https://github.com/ParkWardRR/relaystation.git
+cd relaystation
+
+# Install frontend dependencies
+make web-install
+
+# Option 1: Run backend + frontend separately (hot reload)
+make web-dev          # Terminal 1: Frontend dev server
+make dev              # Terminal 2: Backend
+
+# Option 2: Development Docker Compose
+docker compose -f docker/docker-compose.dev.yml up
+```
+
+#### Production Setup
 
 ```bash
 # Clone the repository
@@ -137,28 +200,19 @@ git clone https://github.com/ParkWardRR/relaystation.git
 cd relaystation
 
 # Create data directories
-mkdir -p /opt/relaystation/data
-mkdir -p /opt/relaystation/configs
-
-# Copy configuration
-cp configs/streams.json /opt/relaystation/configs/
+sudo mkdir -p /opt/relaystation
+sudo cp -r . /opt/relaystation/
+cd /opt/relaystation
 
 # Start the application
 docker compose -f docker/docker-compose.yml up -d
 
-# Enable auto-start on boot
-docker update --restart unless-stopped relaystation
-```
-
-**Step 3: Configure Firewall**
-
-```bash
-# Allow HTTP traffic
+# Configure firewall
 sudo firewall-cmd --permanent --add-port=8080/tcp
 sudo firewall-cmd --reload
 ```
 
-**Step 4: (Optional) Setup with systemd**
+**Auto-start with systemd:**
 
 Create `/etc/systemd/system/relaystation.service`:
 
@@ -189,9 +243,7 @@ sudo systemctl start relaystation
 
 ### 🌊 DigitalOcean Droplet
 
-> Quick deployment on DigitalOcean with Docker pre-installed.
-
-**Step 1: Create Droplet**
+#### Create Droplet
 
 1. Log in to [DigitalOcean](https://cloud.digitalocean.com/)
 2. Create a new Droplet:
@@ -200,7 +252,31 @@ sudo systemctl start relaystation
    - **Region:** Choose closest to your users
    - **Authentication:** SSH keys (recommended)
 
-**Step 2: Connect and Deploy**
+#### Development Setup
+
+```bash
+# SSH into your droplet
+ssh root@your-droplet-ip
+
+# Install dev tools
+apt update && apt install -y golang-go nodejs npm ffmpeg
+
+# Clone the repository
+git clone https://github.com/ParkWardRR/relaystation.git
+cd relaystation
+
+# Install frontend dependencies
+make web-install
+
+# Option 1: Run backend + frontend separately (hot reload)
+make web-dev          # Terminal 1: Frontend dev server
+make dev              # Terminal 2: Backend
+
+# Option 2: Development Docker Compose
+docker compose -f docker/docker-compose.dev.yml up
+```
+
+#### Production Setup
 
 ```bash
 # SSH into your droplet
@@ -213,27 +289,19 @@ cd relaystation
 # Start RelayStation
 docker compose -f docker/docker-compose.yml up -d
 
+# Configure firewall
+ufw allow OpenSSH
+ufw allow 8080/tcp
+ufw enable
+
 # Verify it's running
 docker compose -f docker/docker-compose.yml ps
 ```
 
-**Step 3: Configure UFW Firewall**
+**Setup domain with Nginx + SSL:**
 
 ```bash
-# Allow SSH (important!)
-ufw allow OpenSSH
-
-# Allow RelayStation
-ufw allow 8080/tcp
-
-# Enable firewall
-ufw enable
-```
-
-**Step 4: (Optional) Setup Domain with Nginx**
-
-```bash
-# Install Nginx
+# Install Nginx and Certbot
 apt update && apt install -y nginx certbot python3-certbot-nginx
 
 # Create Nginx config
@@ -260,6 +328,33 @@ nginx -t && systemctl reload nginx
 
 # Get SSL certificate
 certbot --nginx -d your-domain.com
+```
+
+**Auto-start with systemd:**
+
+Create `/etc/systemd/system/relaystation.service`:
+
+```ini
+[Unit]
+Description=RelayStation HLS Streaming Relay
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/root/relaystation
+ExecStart=/usr/bin/docker compose -f docker/docker-compose.yml up -d
+ExecStop=/usr/bin/docker compose -f docker/docker-compose.yml down
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+systemctl daemon-reload
+systemctl enable relaystation
+systemctl start relaystation
 ```
 
 ---
@@ -328,31 +423,7 @@ Edit `configs/streams.json` to add your streams:
 
 ---
 
-## Development
-
-### Prerequisites
-
-| Requirement | Version |
-|-------------|---------|
-| Go | 1.22+ |
-| Node.js | 20+ |
-| FFmpeg | 6.0+ |
-
-### Build from Source
-
-```bash
-# Clone
-git clone https://github.com/ParkWardRR/relaystation.git
-cd relaystation
-
-# Backend
-go build -o bin/relaystation ./cmd/relaystation
-
-# Frontend
-cd web && npm install && npm run build
-```
-
-### Make Commands
+## Make Commands
 
 ```bash
 make build        # Build Go binary
