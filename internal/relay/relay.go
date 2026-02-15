@@ -36,6 +36,7 @@ type FeedSource struct {
 	URL           string `json:"url"`                      // m3u8 URL of the upstream source
 	Label         string `json:"label"`                    // human-readable label (e.g., "DD12-US")
 	Active        bool   `json:"active"`                   // true if this source is currently being relayed
+	Preferred     bool   `json:"preferred,omitempty"`      // if true, this source is always tried first
 	MaxBandwidth  int    `json:"max_bandwidth,omitempty"`  // max BANDWIDTH from EXT-X-STREAM-INF (bps)
 	MaxResolution string `json:"max_resolution,omitempty"` // max RESOLUTION (e.g., "1920x1080")
 	Probed        bool   `json:"probed"`                   // whether bandwidth has been probed
@@ -603,11 +604,16 @@ func (r *Relay) ProbeSources() {
 		r.sources[res.idx].Probed = true
 	}
 
+	// Sort: preferred first, then by bandwidth descending
 	sort.SliceStable(r.sources, func(i, j int) bool {
+		// Preferred sources always come first
+		if r.sources[i].Preferred != r.sources[j].Preferred {
+			return r.sources[i].Preferred
+		}
 		return r.sources[i].MaxBandwidth > r.sources[j].MaxBandwidth
 	})
 
-	log.Println("[Relay] Sources sorted by bandwidth (highest first)")
+	log.Println("[Relay] Sources sorted (preferred first, then by bandwidth)")
 }
 
 // probeSourceBandwidth extracts max BANDWIDTH from m3u8 manifest

@@ -54,18 +54,15 @@ func main() {
 	// Sources are ordered by reliability - CDN feeds first, then fallbacks
 	nascarRelay := relay.NewRelay(relay.Config{
 		Sources: []relay.FeedSource{
-			// DD12 US Feed (primary CDN)
+			// DD12 International Feed — preferred default (1080p, commercial-free reference)
+			{URL: "https://dtmf21.b-cdn.net/docx/master.m3u8", Label: "DD12-INT", Preferred: true},
+			// Fallbacks sorted by bandwidth automatically:
 			{URL: "https://dtmf21.b-cdn.net/pdfs/master.m3u8", Label: "DD12-US"},
-			// DD12 International Feed (CDN)
-			{URL: "https://dtmf21.b-cdn.net/docx/master.m3u8", Label: "DD12-INT"},
-			// AcezTrims FOX feed
 			{URL: "https://bozztv.com/dvrfl05/gin-fox5/index.m3u8", Label: "ACE-FOX"},
-			// AcezTrims TSN feed
 			{URL: "https://stream.decentdoubts.net/809/index.m3u8", Label: "ACE-TSN"},
-			// DD12 fallbacks
+			{URL: "https://dd2zjam465om0.cloudfront.net/out/v1/46c8ebab8e694683b10f5b14fb0baa85/index.m3u8", Label: "DD12-CF"},
 			{URL: "https://inshallah.woah-patio.one/hls/stream.m3u8", Label: "DD12-FB1"},
 			{URL: "https://dickrida.dd12streams.com/hls/nda.m3u8", Label: "DD12-FB2"},
-			{URL: "https://dd2zjam465om0.cloudfront.net/out/v1/46c8ebab8e694683b10f5b14fb0baa85/index.m3u8", Label: "DD12-CF"},
 		},
 		OutputBase:  outputBase,
 		OutputPath:  "relay/nascar",
