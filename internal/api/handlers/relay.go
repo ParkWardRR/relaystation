@@ -133,6 +133,18 @@ h1{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent
 .vlc-url{font-family:'SF Mono',Monaco,monospace;font-size:13px;color:var(--accent2);word-break:break-all;user-select:all;cursor:text}
 .toast{position:fixed;bottom:24px;right:24px;background:var(--accent);color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:500;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none;z-index:100}
 .toast.show{opacity:1;transform:translateY(0)}
+.comm-bar{margin-top:20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;transition:all .3s}
+.comm-bar.commercial{border-color:var(--red);background:linear-gradient(135deg,rgba(255,107,107,.08),rgba(255,107,107,.03));animation:commPulse 2s infinite}
+@keyframes commPulse{0%,100%{box-shadow:0 0 0 rgba(255,107,107,0)}50%{box-shadow:0 0 20px rgba(255,107,107,.15)}}
+.comm-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.comm-title{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.comm-badge{font-size:10px;padding:3px 10px;border-radius:6px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.comm-badge.normal{background:rgba(0,184,148,.15);color:var(--green)}
+.comm-badge.silence{background:rgba(255,217,61,.15);color:var(--yellow)}
+.comm-badge.commercial{background:rgba(255,107,107,.15);color:var(--red)}
+.comm-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.comm-stat{font-size:12px;color:var(--text2)}
+.comm-stat .val{font-size:16px;font-weight:600;color:var(--text);margin-top:2px}
 </style>
 </head>
 <body>
@@ -174,6 +186,19 @@ h1{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent
 
   <div class="section-title">Sources</div>
   <div class="sources" id="sourcesList"></div>
+
+  <div class="comm-bar" id="commBar">
+    <div class="comm-header">
+      <div class="comm-title">📺 Commercial Detector <span class="comm-badge" id="commBadge">—</span></div>
+      <span style="font-size:11px;color:var(--text2)" id="commStream"></span>
+    </div>
+    <div class="comm-stats">
+      <div class="comm-stat"><div>Silence</div><div class="val" id="commSilence">0s</div></div>
+      <div class="comm-stat"><div>Commercials</div><div class="val" id="commCount">0</div></div>
+      <div class="comm-stat"><div>Learned</div><div class="val" id="commLearned">0</div></div>
+      <div class="comm-stat"><div>Classifier</div><div class="val" id="commClassifier">—</div></div>
+    </div>
+  </div>
 
   <div class="vlc-bar">
     <div class="label">VLC Network Stream URL</div>
@@ -300,6 +325,44 @@ async function switchTo(idx) {
 // Poll every 2 seconds
 fetchStatus();
 setInterval(fetchStatus, 2000);
+
+// Commercial detection polling
+async function fetchCommercial() {
+  try {
+    const r = await fetch('/api/commercial/status');
+    const c = await r.json();
+    renderCommercial(c);
+  } catch(e) {}
+}
+
+async function fetchPatterns() {
+  try {
+    const r = await fetch('/api/commercial/patterns');
+    const p = await r.json();
+    document.getElementById('commLearned').textContent = p.total_samples || 0;
+  } catch(e) {}
+}
+
+function renderCommercial(c) {
+  const bar = document.getElementById('commBar');
+  const badge = document.getElementById('commBadge');
+  bar.className = 'comm-bar' + (c.state === 'commercial' ? ' commercial' : '');
+  badge.textContent = c.state.toUpperCase();
+  badge.className = 'comm-badge ' + c.state;
+  document.getElementById('commStream').textContent = c.monitoring ? ('Monitoring: ' + c.stream_label) : 'Not active';
+  document.getElementById('commSilence').textContent = c.silence_duration_sec > 0 ? c.silence_duration_sec.toFixed(0) + 's' : '0s';
+  document.getElementById('commCount').textContent = c.total_commercials || 0;
+  if (c.classifier && c.classifier.enabled) {
+    document.getElementById('commClassifier').textContent = c.classifier.top_label ? (c.classifier.top_label + ' ' + (c.classifier.confidence * 100).toFixed(0) + '%') : 'Active';
+  } else {
+    document.getElementById('commClassifier').textContent = 'FFmpeg only';
+  }
+}
+
+fetchCommercial();
+fetchPatterns();
+setInterval(fetchCommercial, 2000);
+setInterval(fetchPatterns, 15000);
 </script>
 </body>
 </html>`

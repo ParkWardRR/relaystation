@@ -44,5 +44,13 @@ web-build:
 web-dev:
 	cd web && npm run dev
 
+# Build CoreML sound classifier (macOS only, requires Xcode CLI tools)
+classifier:
+	swiftc -O -framework SoundAnalysis -framework AVFoundation \
+		-framework CoreMedia \
+		tools/soundclassifier/main.swift \
+		-o tools/soundclassifier/soundclassifier
+	@echo "CoreML classifier built → tools/soundclassifier/soundclassifier"
+
 # Full build (web + docker)
 all: web-install web-build docker

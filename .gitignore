@@ -1,5 +1,6 @@
 # Binaries
 relaystation
+tools/soundclassifier/soundclassifier
 *.exe
 
 # Go
@@ -14,6 +15,9 @@ node_modules/
 hls/
 *.m3u8
 *.ts
+
+# Learned data
+commercial_patterns.json
 
 # IDE
 .idea/
