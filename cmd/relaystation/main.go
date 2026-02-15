@@ -114,6 +114,18 @@ func main() {
 		log.Println("📺 Commercial detector + learner active on DD12-INT")
 	}
 
+	// Independent stream monitors — detect commercials WITHOUT DD12-INT
+	// These use learned patterns from the PatternDB to predict commercials
+	// on any stream, so once enough data is collected, DD12-INT isn't needed.
+	foxMonitor := commercial.NewStreamMonitor(patternDB, commercial.LearnStream{
+		URL: "https://bozztv.com/dvrfl05/gin-fox5/index.m3u8", Label: "ACE-FOX",
+	})
+	tsnMonitor := commercial.NewStreamMonitor(patternDB, commercial.LearnStream{
+		URL: "https://stream.decentdoubts.net/809/index.m3u8", Label: "ACE-TSN",
+	})
+	foxMonitor.Start()
+	tsnMonitor.Start()
+
 	// Create API router
 	app := api.NewRouter(cfg, mgr, nascarRelay, commDetector, patternDB, staticDir)
 
@@ -125,6 +137,8 @@ func main() {
 		<-quit
 		log.Println("Shutting down...")
 		nascarRelay.Stop()
+		foxMonitor.Stop()
+		tsnMonitor.Stop()
 		commLearner.Stop()
 		commDetector.Stop()
 		mgr.Stop()

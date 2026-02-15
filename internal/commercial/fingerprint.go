@@ -24,9 +24,12 @@ type AudioFingerprint struct {
 	Timestamp    time.Time `json:"timestamp"`
 	StreamLabel  string    `json:"stream_label"` // which stream this was captured from
 	StreamURL    string    `json:"stream_url,omitempty"`
-	EnergyRMS    []float64 `json:"energy_rms"`    // RMS energy per 1s window
+	EnergyRMS    []float64 `json:"energy_rms"`    // RMS energy per 1s window (linear)
+	Loudness     []float64 `json:"loudness"`      // per-second momentary loudness (LUFS)
 	PeakDB       float64   `json:"peak_db"`       // peak dB
 	MeanDB       float64   `json:"mean_db"`       // mean dB
+	StddevDB     float64   `json:"stddev_db"`     // stddev of dB levels (variance = transitions)
+	DBRange      float64   `json:"db_range"`      // max - min dB (dynamic range)
 	IsCommercial bool      `json:"is_commercial"` // label: true = captured during commercial
 	Source       string    `json:"source"`        // how it was labeled ("dd12-int-silence", "manual", "predicted")
 	Duration     float64   `json:"duration_sec"`  // duration of captured segment
@@ -105,7 +108,8 @@ func (db *PatternDB) Stats() PatternStats {
 }
 
 // Predict returns a commercial probability (0-1) for an audio fingerprint
-// by comparing it against learned commercial patterns using cosine similarity.
+// by comparing it against learned commercial patterns using multiple features:
+// energy shape (cosine similarity), mean dB distance, and variance distance.
 // Returns -1 if not enough training data.
 func (db *PatternDB) Predict(fp AudioFingerprint) float64 {
 	db.mu.RLock()
@@ -115,36 +119,63 @@ func (db *PatternDB) Predict(fp AudioFingerprint) float64 {
 		return -1 // not enough data
 	}
 
-	commercialSim, normalSim := 0.0, 0.0
-	commercialCount, normalCount := 0, 0
+	commScore, normScore := 0.0, 0.0
+	commCount, normCount := 0, 0
 
 	for _, p := range db.patterns {
-		if len(p.EnergyRMS) == 0 {
+		// Compute multi-feature similarity
+		sim := 0.0
+		features := 0
+
+		// 1. Energy shape similarity (cosine)
+		if len(p.EnergyRMS) > 0 && len(fp.EnergyRMS) > 0 {
+			sim += cosineSimilarity(fp.EnergyRMS, p.EnergyRMS)
+			features++
+		}
+		// 2. Loudness shape similarity
+		if len(p.Loudness) > 0 && len(fp.Loudness) > 0 {
+			sim += cosineSimilarity(fp.Loudness, p.Loudness)
+			features++
+		}
+		// 3. Mean dB distance (closer = more similar)
+		if p.MeanDB != 0 && fp.MeanDB != 0 {
+			dbDist := math.Abs(fp.MeanDB - p.MeanDB)
+			sim += math.Max(0, 1.0-dbDist/30.0) // 30dB range → 0-1
+			features++
+		}
+		// 4. Variance similarity (commercials often have different dynamics)
+		if p.StddevDB != 0 && fp.StddevDB != 0 {
+			varDist := math.Abs(fp.StddevDB - p.StddevDB)
+			sim += math.Max(0, 1.0-varDist/15.0)
+			features++
+		}
+
+		if features == 0 {
 			continue
 		}
-		sim := cosineSimilarity(fp.EnergyRMS, p.EnergyRMS)
+		avgSim := sim / float64(features)
+
 		if p.IsCommercial {
-			commercialSim += sim
-			commercialCount++
+			commScore += avgSim
+			commCount++
 		} else {
-			normalSim += sim
-			normalCount++
+			normScore += avgSim
+			normCount++
 		}
 	}
 
-	if commercialCount == 0 || normalCount == 0 {
+	if commCount == 0 || normCount == 0 {
 		return -1
 	}
 
-	avgCommercial := commercialSim / float64(commercialCount)
-	avgNormal := normalSim / float64(normalCount)
+	avgComm := commScore / float64(commCount)
+	avgNorm := normScore / float64(normCount)
 
-	// Higher similarity to commercial patterns = higher probability
-	total := avgCommercial + avgNormal
+	total := avgComm + avgNorm
 	if total == 0 {
 		return 0
 	}
-	return avgCommercial / total
+	return avgComm / total
 }
 
 // Save persists the database to disk.
@@ -341,16 +372,17 @@ func (l *Learner) captureFingerprint(stream LearnStream, isCommercial bool) {
 }
 
 // extractFingerprint runs FFmpeg to extract audio features from a stream.
-// It captures `durationSec` seconds of audio and computes per-second RMS energy.
+// It captures `durationSec` seconds of audio and computes per-second loudness
+// using ebur128 (reliable per-second output) plus silencedetect for silence ratio.
 func extractFingerprint(ctx context.Context, streamURL, label string, durationSec int) (*AudioFingerprint, error) {
-	// Use FFmpeg astats filter for per-frame audio statistics
+	// ebur128 outputs per-second momentary loudness (M:) reliably
 	args := []string{
 		"ffmpeg", "-hide_banner", "-loglevel", "info",
 		"-reconnect", "1", "-reconnect_streamed", "1",
 		"-i", streamURL,
 		"-vn",
 		"-t", strconv.Itoa(durationSec),
-		"-af", "astats=metadata=1:reset=1:length=1",
+		"-af", "ebur128=peak=true:framelog=verbose",
 		"-f", "null", "-",
 	}
 
@@ -363,49 +395,238 @@ func extractFingerprint(ctx context.Context, streamURL, label string, durationSe
 		return nil, fmt.Errorf("start error: %w", err)
 	}
 
-	// Parse astats output for RMS levels
-	rmsRe := regexp.MustCompile(`RMS level dB:\s*([-\d.]+)`)
-	peakRe := regexp.MustCompile(`Peak level dB:\s*([-\d.]+)`)
+	// ebur128 outputs lines like:
+	// [Parsed_ebur128_0 @ 0x...] t: 1.0   TARGET:-23 LUFS   M: -20.3 S: -19.1 ...
+	momentaryRe := regexp.MustCompile(`M:\s*([-\d.]+)`)
+	peakRe := regexp.MustCompile(`Peak:\s*([-\d.]+)`)
 
+	var loudness []float64
 	var energyRMS []float64
-	var peakDB, sumDB float64
-	count := 0
+	var peaks []float64
 
 	scanner := bufio.NewScanner(stderr)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if m := rmsRe.FindStringSubmatch(line); len(m) > 1 {
-			if val, err := strconv.ParseFloat(m[1], 64); err == nil {
-				// Convert dB to linear energy for the fingerprint
+		if m := momentaryRe.FindStringSubmatch(line); len(m) > 1 {
+			if val, err := strconv.ParseFloat(m[1], 64); err == nil && val > -120 {
+				loudness = append(loudness, val)
+				// Convert LUFS to linear energy
 				linear := math.Pow(10, val/20)
 				energyRMS = append(energyRMS, linear)
-				sumDB += val
-				count++
 			}
 		}
 		if m := peakRe.FindStringSubmatch(line); len(m) > 1 {
 			if val, err := strconv.ParseFloat(m[1], 64); err == nil {
-				if val > peakDB || peakDB == 0 {
-					peakDB = val
-				}
+				peaks = append(peaks, val)
 			}
 		}
 	}
 
 	cmd.Wait()
 
-	meanDB := 0.0
-	if count > 0 {
-		meanDB = sumDB / float64(count)
-	}
+	// Compute statistical features
+	meanDB, stddevDB, dbRange, peakDB := computeStats(loudness, peaks)
 
 	return &AudioFingerprint{
 		Timestamp:   time.Now(),
 		StreamLabel: label,
 		StreamURL:   streamURL,
 		EnergyRMS:   energyRMS,
+		Loudness:    loudness,
 		PeakDB:      peakDB,
 		MeanDB:      meanDB,
+		StddevDB:    stddevDB,
+		DBRange:     dbRange,
 		Duration:    float64(durationSec),
 	}, nil
+}
+
+// computeStats derives statistical features from loudness data.
+func computeStats(loudness, peaks []float64) (meanDB, stddevDB, dbRange, peakDB float64) {
+	if len(loudness) == 0 {
+		return 0, 0, 0, 0
+	}
+
+	// Mean
+	var sum float64
+	for _, v := range loudness {
+		sum += v
+	}
+	meanDB = sum / float64(len(loudness))
+
+	// Stddev
+	var sumSq float64
+	for _, v := range loudness {
+		d := v - meanDB
+		sumSq += d * d
+	}
+	stddevDB = math.Sqrt(sumSq / float64(len(loudness)))
+
+	// Range
+	minDB, maxDB := loudness[0], loudness[0]
+	for _, v := range loudness[1:] {
+		if v < minDB {
+			minDB = v
+		}
+		if v > maxDB {
+			maxDB = v
+		}
+	}
+	dbRange = maxDB - minDB
+
+	// Peak
+	peakDB = -999
+	for _, v := range peaks {
+		if v > peakDB {
+			peakDB = v
+		}
+	}
+	if peakDB == -999 {
+		peakDB = maxDB
+	}
+
+	return
+}
+
+// --- StreamMonitor: independent commercial detection on any stream ---
+
+// StreamMonitor continuously monitors a single stream for commercial patterns
+// using the learned PatternDB. It does NOT need DD12-INT — it works purely
+// from learned patterns.
+type StreamMonitor struct {
+	mu         sync.RWMutex
+	db         *PatternDB
+	stream     LearnStream
+	running    bool
+	commProb   float64 // last prediction (0-1)
+	isComm     bool    // thresholded prediction
+	lastCheck  time.Time
+	lastFP     *AudioFingerprint
+	checkCount int
+	commCount  int
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
+}
+
+// MonitorStatus is the JSON status from a StreamMonitor.
+type MonitorStatus struct {
+	StreamLabel      string  `json:"stream_label"`
+	Running          bool    `json:"running"`
+	CommercialProb   float64 `json:"commercial_prob"`
+	IsCommercial     bool    `json:"is_commercial"`
+	LastCheck        string  `json:"last_check,omitempty"`
+	TotalChecks      int     `json:"total_checks"`
+	TotalCommercials int     `json:"total_commercials"`
+}
+
+// NewStreamMonitor creates a monitor that predicts commercials on a stream.
+func NewStreamMonitor(db *PatternDB, stream LearnStream) *StreamMonitor {
+	return &StreamMonitor{
+		db:     db,
+		stream: stream,
+	}
+}
+
+// Start begins monitoring. Polls every 15s with a 5s audio sample.
+func (m *StreamMonitor) Start() {
+	m.mu.Lock()
+	if m.running {
+		m.mu.Unlock()
+		return
+	}
+	m.running = true
+	m.ctx, m.cancel = context.WithCancel(context.Background())
+	m.mu.Unlock()
+
+	m.wg.Add(1)
+	go m.monitorLoop()
+	log.Printf("[Monitor:%s] Started independent commercial monitor", m.stream.Label)
+}
+
+// Stop halts the monitor.
+func (m *StreamMonitor) Stop() {
+	m.mu.Lock()
+	if !m.running {
+		m.mu.Unlock()
+		return
+	}
+	m.running = false
+	m.cancel()
+	m.mu.Unlock()
+	m.wg.Wait()
+}
+
+// GetStatus returns the monitor status.
+func (m *StreamMonitor) GetStatus() MonitorStatus {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	s := MonitorStatus{
+		StreamLabel:      m.stream.Label,
+		Running:          m.running,
+		CommercialProb:   m.commProb,
+		IsCommercial:     m.isComm,
+		TotalChecks:      m.checkCount,
+		TotalCommercials: m.commCount,
+	}
+	if !m.lastCheck.IsZero() {
+		s.LastCheck = m.lastCheck.Format(time.RFC3339)
+	}
+	return s
+}
+
+func (m *StreamMonitor) monitorLoop() {
+	defer m.wg.Done()
+
+	// Initial delay to let patterns accumulate
+	select {
+	case <-time.After(30 * time.Second):
+	case <-m.ctx.Done():
+		return
+	}
+
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-ticker.C:
+			if !m.db.Stats().Ready {
+				continue // not enough training data yet
+			}
+			m.checkOnce()
+		}
+	}
+}
+
+func (m *StreamMonitor) checkOnce() {
+	ctx, cancel := context.WithTimeout(m.ctx, 10*time.Second)
+	defer cancel()
+
+	fp, err := extractFingerprint(ctx, m.stream.URL, m.stream.Label, 5)
+	if err != nil {
+		return
+	}
+
+	prob := m.db.Predict(*fp)
+	if prob < 0 {
+		return // not ready
+	}
+
+	m.mu.Lock()
+	m.commProb = prob
+	m.isComm = prob > 0.6 // 60% threshold for commercial
+	m.lastCheck = time.Now()
+	m.lastFP = fp
+	m.checkCount++
+	if m.isComm {
+		m.commCount++
+	}
+	m.mu.Unlock()
+
+	if m.isComm {
+		log.Printf("[Monitor:%s] 📺 COMMERCIAL predicted (prob=%.1f%%)", m.stream.Label, prob*100)
+	}
 }
