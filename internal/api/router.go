@@ -9,11 +9,12 @@ import (
 
 	"github.com/ParkWardRR/relaystation/internal/api/handlers"
 	"github.com/ParkWardRR/relaystation/internal/config"
+	"github.com/ParkWardRR/relaystation/internal/relay"
 	"github.com/ParkWardRR/relaystation/internal/stream"
 )
 
 // NewRouter creates and configures the Fiber application
-func NewRouter(cfg *config.Manager, mgr *stream.Manager, staticDir string) *fiber.App {
+func NewRouter(cfg *config.Manager, mgr *stream.Manager, relayInstance *relay.Relay, staticDir string) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName: "RelayStation",
 	})
@@ -35,6 +36,7 @@ func NewRouter(cfg *config.Manager, mgr *stream.Manager, staticDir string) *fibe
 	statusHandler := handlers.NewStatusHandler(cfg, mgr)
 	settingsHandler := handlers.NewSettingsHandler(cfg, mgr)
 	wsHandler := handlers.NewWebSocketHandler(mgr)
+	relayHandler := handlers.NewRelayHandler(relayInstance)
 
 	// API routes
 	api := app.Group("/api")
@@ -59,6 +61,14 @@ func NewRouter(cfg *config.Manager, mgr *stream.Manager, staticDir string) *fibe
 	api.Post("/presets", presetHandler.Create)
 	api.Delete("/presets/:id", presetHandler.Delete)
 
+	// Relay
+	api.Get("/relay/status", relayHandler.GetStatus)
+	api.Post("/relay/switch/:idx", relayHandler.SwitchSource)
+	api.Post("/relay/scan", relayHandler.ScanSources)
+
+	// Relay Dashboard (before SPA fallback)
+	app.Get("/relay", relayHandler.Dashboard)
+
 	// Settings
 	api.Get("/defaults", settingsHandler.GetDefaults)
 	api.Put("/defaults", settingsHandler.UpdateDefaults)
@@ -76,7 +86,7 @@ func NewRouter(cfg *config.Manager, mgr *stream.Manager, staticDir string) *fibe
 	// HLS output files - serve from manager's output directory
 	hlsOutputDir := mgr.OutputBase()
 	app.Static("/hls", hlsOutputDir, fiber.Static{
-		Compress: false,
+		Compress:      false,
 		CacheDuration: 0,
 	})
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/ParkWardRR/relaystation/internal/api"
 	"github.com/ParkWardRR/relaystation/internal/config"
+	"github.com/ParkWardRR/relaystation/internal/relay"
 	"github.com/ParkWardRR/relaystation/internal/stream"
 )
 
@@ -47,8 +48,43 @@ func main() {
 	mgr := stream.NewManager(cfg, outputBase)
 	mgr.Start()
 
+	// Create NASCAR failover relay with all discovered sources
+	// Sources are ordered by reliability - CDN feeds first, then fallbacks
+	nascarRelay := relay.NewRelay(relay.Config{
+		Sources: []relay.FeedSource{
+			// DD12 US Feed (primary CDN)
+			{URL: "https://dtmf21.b-cdn.net/pdfs/master.m3u8", Label: "DD12-US"},
+			// DD12 International Feed (CDN)
+			{URL: "https://dtmf21.b-cdn.net/docx/master.m3u8", Label: "DD12-INT"},
+			// AcezTrims FOX feed
+			{URL: "https://bozztv.com/dvrfl05/gin-fox5/index.m3u8", Label: "ACE-FOX"},
+			// AcezTrims TSN feed
+			{URL: "https://stream.decentdoubts.net/809/index.m3u8", Label: "ACE-TSN"},
+			// DD12 fallbacks
+			{URL: "https://inshallah.woah-patio.one/hls/stream.m3u8", Label: "DD12-FB1"},
+			{URL: "https://dickrida.dd12streams.com/hls/nda.m3u8", Label: "DD12-FB2"},
+			{URL: "https://dd2zjam465om0.cloudfront.net/out/v1/46c8ebab8e694683b10f5b14fb0baa85/index.m3u8", Label: "DD12-CF"},
+		},
+		OutputBase:  outputBase,
+		OutputPath:  "relay/nascar",
+		ListenAddr:  listenAddr,
+		MaxRestarts: 3,
+	})
+
+	// Start the relay
+	if err := nascarRelay.Start(); err != nil {
+		log.Printf("Warning: Could not start NASCAR relay: %v", err)
+		log.Println("Relay will be available at /api/relay/status once sources are live")
+	} else {
+		log.Println("===========================================")
+		log.Println("NASCAR Relay is LIVE!")
+		log.Printf("VLC URL:       http://YOUR_LOCAL_IP%s/hls/relay/nascar/stream.m3u8", listenAddr)
+		log.Printf("Dashboard:     http://YOUR_LOCAL_IP%s/relay", listenAddr)
+		log.Println("===========================================")
+	}
+
 	// Create API router
-	app := api.NewRouter(cfg, mgr, staticDir)
+	app := api.NewRouter(cfg, mgr, nascarRelay, staticDir)
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
@@ -57,6 +93,7 @@ func main() {
 	go func() {
 		<-quit
 		log.Println("Shutting down...")
+		nascarRelay.Stop()
 		mgr.Stop()
 		app.Shutdown()
 	}()
