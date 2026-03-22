@@ -144,14 +144,14 @@ The relay accepts **multiple upstream m3u8 sources** and ensures continuous play
 Sources are configured in `cmd/relaystation/main.go`. The relay probes and re-orders them automatically:
 
 ```go
-nascarRelay := relay.NewRelay(relay.Config{
+imsaRelay := relay.NewRelay(relay.Config{
     Sources: []relay.FeedSource{
-        {URL: "https://cdn.example.com/stream1/master.m3u8", Label: "CDN-Primary"},
-        {URL: "https://cdn.example.com/stream2/master.m3u8", Label: "CDN-Backup"},
-        {URL: "https://backup.example.com/stream.m3u8",      Label: "Backup"},
+        {URL: "http://209.38.25.42/live/imsa_international/master.m3u8", Label: "IMSA-International", Preferred: true},
+        {URL: "http://209.38.25.42/live/imsa_icc_01/master.m3u8", Label: "IMSA-ICC1"},
+        {URL: "http://tx.sharp-stream.com/icecast.php?i=radioshow2.mp3", Label: "RadioLeaks"},
     },
     OutputBase:     outputBase,   // HLS output directory
-    OutputPath:     "relay/name", // path under OutputBase
+    OutputPath:     "relay/imsa", // path under OutputBase
     ListenAddr:     ":8080",
     MaxRestarts:    3,            // per-source restart limit before failover
     HLSSegmentTime: 4,           // seconds per segment
@@ -209,7 +209,7 @@ go run ./cmd/relaystation
 open http://localhost:8080/relay
 
 # Open in VLC
-open -a VLC http://localhost:8080/hls/relay/nascar/stream.m3u8
+open -a VLC http://localhost:8080/hls/relay/imsa/stream.m3u8
 ```
 
 <br>
@@ -346,28 +346,23 @@ sudo firewall-cmd --permanent --add-port=8080/tcp && sudo firewall-cmd --reload
 </details>
 
 <details>
-<summary><strong>🌊 DigitalOcean Droplet</strong></summary>
+<summary><strong>🌊 DigitalOcean Droplet (Automated Relay Node)</strong></summary>
 
-### Create Droplet
-1. **Image:** Docker on Ubuntu (Marketplace)
-2. **Size:** Basic $6/mo (1 vCPU, 1GB) — or higher for multiple streams
-3. **Region:** Choose closest to your users
-4. **Auth:** SSH keys (recommended)
+### Quick Deploy (Recommended for IMSA Streams)
+The repository includes a dedicated deployment script that builds a custom Droplet configured purely for heavy-duty video proxying. This node uses **Super-RAM buffering** (16MB per connection) to completely bypass SSD proxy files, preventing IOPS exhaustion and stream stuttering. 
 
-### Production Setup
 ```bash
-ssh root@your-droplet-ip
-git clone https://github.com/ParkWardRR/relaystation.git
-cd relaystation
-docker compose -f docker/docker-compose.yml up -d
+# Export your DO API Token
+export DO_PAT="dop_v1_..."
 
-# Configure firewall
-ufw allow OpenSSH
-ufw allow 8080/tcp
-ufw enable
+# Run the deployment script
+./scripts/deploy_imsa_relay.sh $DO_PAT
 ```
 
-**Domain + SSL:** Install Nginx + Certbot — see full docs below.
+The script automatically:
+- Creates a `$4/mo` droplet in the `syd1` region.
+- Installs and aggressively tunes Nginx for zero-latency HTTP/1.1 Keepalive proxying.
+- Self-destructs the droplet in 24 hours to prevent recurring billing.
 
 </details>
 
@@ -445,7 +440,7 @@ Edit `configs/streams.json` to add your streams:
 | `/api/relay/status` | GET | Relay status, sources, health, bandwidth |
 | `/api/relay/switch/:idx` | POST | Switch to source by index (instant) |
 | `/api/relay/scan` | POST | Scan web pages for stream URLs |
-| `/hls/relay/nascar/stream.m3u8` | GET | Output HLS stream for VLC |
+| `/hls/relay/imsa/stream.m3u8` | GET | Output HLS stream for VLC |
 
 #### Example: Switch Source
 

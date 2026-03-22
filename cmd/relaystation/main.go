@@ -50,48 +50,38 @@ func main() {
 	mgr := stream.NewManager(cfg, outputBase)
 	mgr.Start()
 
-	// Create NASCAR failover relay with all discovered sources
-	// Sources are ordered by reliability - CDN feeds first, then fallbacks
-	nascarRelay := relay.NewRelay(relay.Config{
+	// Create IMSA failover relay with DO droplet sources
+	imsaRelay := relay.NewRelay(relay.Config{
 		Sources: []relay.FeedSource{
-			// DD12 International Feed — preferred default (1080p, commercial-free reference)
-			{URL: "https://dtmf21.b-cdn.net/docx/master.m3u8", Label: "DD12-INT", Preferred: true},
-			// Fallbacks sorted by bandwidth automatically:
-			{URL: "https://dtmf21.b-cdn.net/pdfs/master.m3u8", Label: "DD12-US"},
-			{URL: "https://bozztv.com/dvrfl05/gin-fox5/index.m3u8", Label: "ACE-FOX"},
-			{URL: "https://stream.decentdoubts.net/809/index.m3u8", Label: "ACE-TSN"},
-			{URL: "https://dd2zjam465om0.cloudfront.net/out/v1/46c8ebab8e694683b10f5b14fb0baa85/index.m3u8", Label: "DD12-CF"},
-			{URL: "https://inshallah.woah-patio.one/hls/stream.m3u8", Label: "DD12-FB1"},
-			{URL: "https://dickrida.dd12streams.com/hls/nda.m3u8", Label: "DD12-FB2"},
+			{URL: "http://209.38.25.42/live/imsa_international/master.m3u8", Label: "IMSA-International", Preferred: true},
+			{URL: "http://209.38.25.42/live/imsa_icc_01/master.m3u8", Label: "IMSA-ICC1"},
+			{URL: "http://209.38.25.42/live/imsa_icc_02/master.m3u8", Label: "IMSA-ICC2"},
 		},
 		OutputBase:  outputBase,
-		OutputPath:  "relay/nascar",
+		OutputPath:  "relay/imsa",
 		ListenAddr:  listenAddr,
 		MaxRestarts: 3,
 	})
 
 	// Start the relay
-	if err := nascarRelay.Start(); err != nil {
-		log.Printf("Warning: Could not start NASCAR relay: %v", err)
+	if err := imsaRelay.Start(); err != nil {
+		log.Printf("Warning: Could not start IMSA relay: %v", err)
 		log.Println("Relay will be available at /api/relay/status once sources are live")
 	} else {
 		log.Println("===========================================")
-		log.Println("NASCAR Relay is LIVE!")
-		log.Printf("VLC URL:       http://YOUR_LOCAL_IP%s/hls/relay/nascar/stream.m3u8", listenAddr)
-		log.Printf("Dashboard:     http://YOUR_LOCAL_IP%s/relay", listenAddr)
+		log.Println("IMSA Relay is LIVE!")
+		log.Printf("VLC URL:       http://localhost%s/hls/relay/imsa/stream.m3u8", listenAddr)
+		log.Printf("Dashboard:     http://localhost%s/relay", listenAddr)
 		log.Println("===========================================")
 	}
 	// ──── Commercial Detector ────
-	// Monitor DD12-INT for silence to detect commercial breaks.
-	// When DD12-INT goes silent for 10s+, the learner captures audio
-	// fingerprints from other streams, building a model that can
-	// eventually detect commercials on ANY stream independently.
+	// Monitor IMSA-International for silence to detect commercial breaks.
 	patternDBPath := filepath.Join(outputBase, "commercial_patterns.json")
 	patternDB := commercial.NewPatternDB(patternDBPath)
 
 	commDetector := commercial.NewDetector(commercial.Config{
-		StreamURL:          "https://dtmf21.b-cdn.net/docx/master.m3u8",
-		StreamLabel:        "DD12-INT",
+		StreamURL:          "http://209.38.25.42/live/imsa_international/master.m3u8",
+		StreamLabel:        "IMSA-International",
 		SilenceThresholdDB: -30,
 		CommercialSec:      10,
 		ClassifierPath:     "./tools/soundclassifier/soundclassifier",
@@ -99,32 +89,28 @@ func main() {
 
 	// Learner captures fingerprints from other streams during commercials
 	commLearner := commercial.NewLearner(commDetector, patternDB, []commercial.LearnStream{
-		{URL: "https://bozztv.com/dvrfl05/gin-fox5/index.m3u8", Label: "ACE-FOX"},
-		{URL: "https://stream.decentdoubts.net/809/index.m3u8", Label: "ACE-TSN"},
-		{URL: "https://dtmf21.b-cdn.net/pdfs/master.m3u8", Label: "DD12-US"},
+		{URL: "http://209.38.25.42/live/imsa_icc_01/master.m3u8", Label: "IMSA-ICC1"},
+		{URL: "http://209.38.25.42/live/imsa_icc_02/master.m3u8", Label: "IMSA-ICC2"},
 	})
 
 	if err := commDetector.Start(); err != nil {
 		log.Printf("Warning: Could not start commercial detector: %v", err)
 	} else {
 		commLearner.Start()
-		log.Println("📺 Commercial detector + learner active on DD12-INT")
+		log.Println("📺 Commercial detector + learner active on IMSA-International")
 	}
 
-	// Independent stream monitors — detect commercials WITHOUT DD12-INT
-	// These use learned patterns from the PatternDB to predict commercials
-	// on any stream, so once enough data is collected, DD12-INT isn't needed.
-	foxMonitor := commercial.NewStreamMonitor(patternDB, commercial.LearnStream{
-		URL: "https://bozztv.com/dvrfl05/gin-fox5/index.m3u8", Label: "ACE-FOX",
+	icc1Monitor := commercial.NewStreamMonitor(patternDB, commercial.LearnStream{
+		URL: "http://209.38.25.42/live/imsa_icc_01/master.m3u8", Label: "IMSA-ICC1",
 	})
-	tsnMonitor := commercial.NewStreamMonitor(patternDB, commercial.LearnStream{
-		URL: "https://stream.decentdoubts.net/809/index.m3u8", Label: "ACE-TSN",
+	icc2Monitor := commercial.NewStreamMonitor(patternDB, commercial.LearnStream{
+		URL: "http://209.38.25.42/live/imsa_icc_02/master.m3u8", Label: "IMSA-ICC2",
 	})
-	foxMonitor.Start()
-	tsnMonitor.Start()
+	icc1Monitor.Start()
+	icc2Monitor.Start()
 
 	// Create API router
-	app := api.NewRouter(cfg, mgr, nascarRelay, commDetector, patternDB, staticDir)
+	app := api.NewRouter(cfg, mgr, imsaRelay, commDetector, patternDB, staticDir)
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
@@ -133,9 +119,9 @@ func main() {
 	go func() {
 		<-quit
 		log.Println("Shutting down...")
-		nascarRelay.Stop()
-		foxMonitor.Stop()
-		tsnMonitor.Stop()
+		imsaRelay.Stop()
+		icc1Monitor.Stop()
+		icc2Monitor.Stop()
 		commLearner.Stop()
 		commDetector.Stop()
 		mgr.Stop()

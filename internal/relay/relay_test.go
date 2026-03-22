@@ -42,8 +42,8 @@ func TestNewRelay_Defaults(t *testing.T) {
 		OutputBase: "/tmp/relay-test",
 	})
 
-	if r.outputPath != "relay/nascar" {
-		t.Errorf("expected default outputPath 'relay/nascar', got '%s'", r.outputPath)
+	if r.outputPath != "relay/imsa" {
+		t.Errorf("expected default outputPath 'relay/imsa', got '%s'", r.outputPath)
 	}
 	if r.listenAddr != ":8080" {
 		t.Errorf("expected default listenAddr ':8080', got '%s'", r.listenAddr)
@@ -75,10 +75,10 @@ func TestNewRelay_CustomBuffer(t *testing.T) {
 func TestRelay_OutputURL(t *testing.T) {
 	r := NewRelay(Config{
 		OutputBase: "/tmp",
-		OutputPath: "relay/nascar",
+		OutputPath: "relay/imsa",
 	})
 
-	expected := "/hls/relay/nascar/stream.m3u8"
+	expected := "/hls/relay/imsa/stream.m3u8"
 	if r.OutputURL() != expected {
 		t.Errorf("expected OutputURL '%s', got '%s'", expected, r.OutputURL())
 	}

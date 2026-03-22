@@ -153,8 +153,8 @@ func TestScanner_ExtractM3U8URLs(t *testing.T) {
 	}
 }
 
-func TestScanner_ScanPage_NASCARLikePage(t *testing.T) {
-	// Simulate a page similar to the real NASCAR streaming pages
+func TestScanner_ScanPage_IMSALikePage(t *testing.T) {
+	// Simulate a page similar to the real IMSA streaming pages
 	html := `<!--<script language="JavaScript">
 window.location="/";
 </script>-->

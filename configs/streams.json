@@ -1,16 +1,16 @@
 {
   "streams": [
     {
-      "id": "apple-demo",
-      "name": "Apple HLS Demo",
-      "upstream": "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
+      "id": "imsa-international",
+      "name": "IMSA International (Relay)",
+      "upstream": "http://209.38.25.42/live/imsa_international/master.m3u8",
       "enabled": true,
       "profiles": {
         "high_quality": {
-          "id": "apple-demo_high_quality",
+          "id": "imsa-international_high_quality",
           "enabled": true,
           "passthrough": false,
-          "path": "/high_quality/apple-demo/",
+          "path": "/high_quality/imsa-international/",
           "codec": "h264",
           "profile": "high",
           "level": "4.1",

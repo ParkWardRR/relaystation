@@ -106,7 +106,7 @@ func NewRelay(cfg Config) *Relay {
 		cfg.MaxRestarts = 3
 	}
 	if cfg.OutputPath == "" {
-		cfg.OutputPath = "relay/nascar"
+		cfg.OutputPath = "relay/imsa"
 	}
 	if cfg.ListenAddr == "" {
 		cfg.ListenAddr = ":8080"

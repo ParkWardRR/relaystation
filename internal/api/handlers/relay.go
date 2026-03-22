@@ -260,7 +260,7 @@ function render(s) {
 
   // VLC URL
   const host = window.location.host;
-  document.getElementById('vlcUrl').textContent = 'http://' + host + '/hls/relay/nascar/stream.m3u8';
+  document.getElementById('vlcUrl').textContent = 'http://' + host + '/hls/relay/imsa/stream.m3u8';
 
   // Sources list
   const list = document.getElementById('sourcesList');
